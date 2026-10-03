@@ -6,3 +6,6 @@ app/dist/
 app/.xml-ra/
 .claude/
 .vercel/
+
+# Nhật ký Firebase/emulator (có thể chứa email, thông tin project) — không bao giờ đưa lên git
+*.log
