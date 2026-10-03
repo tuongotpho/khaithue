@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { tenKy } from '../core/kho'
 import { tien } from '../core/nhan'
 import { tenTieuMuc } from '../core/taiLieu'
-import type { DoiTac, DongDoiTac, DongQuy, TongQuan as TQ } from '../core/tongQuan'
+import type { DoiTac, DongDoiTac, DongQuy, NguonQuy, TongQuan as TQ } from '../core/tongQuan'
 import { DanhSachCanhBao } from './chung'
 
 const trieu = (n: number) => (Math.abs(n) >= 1e9 ? `${(n / 1e9).toLocaleString('vi-VN', { maximumFractionDigits: 2 })} tỷ` : `${Math.round(n / 1e6).toLocaleString('vi-VN')} tr`)
@@ -173,10 +173,36 @@ function PhanThuGon({ id, tieuDe, phu, dong, setDong, children }: {
 
 // ---------- Bảng đối tác ----------
 
-function BangDoiTac({ ds, tong, loai }: { ds: DongDoiTac[]; tong: number; loai: 'ban' | 'mua' }) {
+/** Dòng ghi chú: quý nào lấy đối tác từ nguồn nào */
+function GhiChuNguon({ nguonQuy, loai }: { nguonQuy: DoiTac['nguonQuy']; loai: 'ban' | 'mua' }) {
+  const nhom = (n: NguonQuy) => nguonQuy.filter((q) => q[loai] === n).map((q) => tenKy(q.khoa))
+  const dong: [string, string[], string][] = [
+    ['Theo hoá đơn (danh sách trọn kỳ)', nhom('hoaDon'), 'text-emerald-800'],
+    ['Theo phụ lục tờ khai 01/GTGT', [...nhom('toKhai'), ...nhom('toKhaiThieuHD').map((x) => `${x} (hoá đơn chưa đủ)`)], 'text-slate-700'],
+    ['Chưa có dữ liệu', nhom('thieu'), 'text-amber-800'],
+  ]
+  return (
+    <div className="mt-2 space-y-0.5 text-xs">
+      {dong.filter(([, ds]) => ds.length).map(([nhan, ds, mau]) => (
+        <div key={nhan} className={mau}><b>{nhan}:</b> quý {ds.join(', ')}</div>
+      ))}
+      <div className="text-slate-500">
+        Phụ lục tờ khai chỉ có tên đối tác (không MST, không số hoá đơn){loai === 'mua' ? ' và chỉ kê hàng mua vào chịu thuế 8%' : ''}. Nạp file Excel “Danh sách hóa đơn” của quý đó để có số liệu chi tiết.
+      </div>
+    </div>
+  )
+}
+
+function BangDoiTac({ ds, tong, loai, nguonQuy }: { ds: DongDoiTac[]; tong: number; loai: 'ban' | 'mua'; nguonQuy: DoiTac['nguonQuy'] }) {
   const [tatCa, setTatCa] = useState(false)
   const [tim, setTim] = useState('')
-  if (!ds.length) return <p className="text-sm text-slate-500">Chưa có hoá đơn {loai === 'ban' ? 'bán ra' : 'mua vào'} trong khoảng này. Nạp file Excel “Danh sách hóa đơn” để xem.</p>
+  if (!ds.length)
+    return (
+      <div>
+        <p className="text-sm text-slate-500">Chưa có dữ liệu {loai === 'ban' ? 'khách hàng' : 'nhà cung cấp'} trong khoảng này.</p>
+        <GhiChuNguon nguonQuy={nguonQuy} loai={loai} />
+      </div>
+    )
   const loc = ds.filter((d) => !tim || d.ten.toLowerCase().includes(tim.toLowerCase()) || d.mst.includes(tim))
   const hien = tatCa || tim ? loc : loc.slice(0, 10)
   const lon = ds[0]
@@ -213,9 +239,12 @@ function BangDoiTac({ ds, tong, loai }: { ds: DongDoiTac[]; tong: number; loai: 
           <tbody>
             {hien.map((d) => (
               <tr key={d.khoa} className="border-t border-slate-100">
-                <td className="p-1">{d.ten}</td>
+                <td className="p-1">
+                  {d.ten}
+                  {d.tuToKhai && <span className="ml-1 rounded bg-slate-100 px-1 text-xs text-slate-600" title="Có phần số liệu lấy từ phụ lục tờ khai 01/GTGT">theo tờ khai</span>}
+                </td>
                 <td className="p-1 tabular-nums text-slate-500">{d.mst || '—'}</td>
-                <td className="p-1 text-right tabular-nums">{d.n}</td>
+                <td className="p-1 text-right tabular-nums">{d.n || '—'}</td>
                 <td className="p-1 text-right tabular-nums">{tien(d.v)}</td>
                 <td className="p-1 text-right tabular-nums">{tien(d.t)}</td>
                 <td className="p-1">
@@ -244,6 +273,7 @@ function BangDoiTac({ ds, tong, loai }: { ds: DongDoiTac[]; tong: number; loai: 
           {tatCa ? 'Chỉ xem 10 đối tác lớn nhất' : `Xem tất cả ${loc.length} đối tác`}
         </button>
       )}
+      <GhiChuNguon nguonQuy={nguonQuy} loai={loai} />
     </div>
   )
 }
@@ -382,7 +412,7 @@ export function TongQuanDN({ tq, tenCty, onMoQuy, layDoiTac }: {
         dong={dong}
         setDong={setDong}
       >
-        <BangDoiTac ds={dt.ban} tong={dt.tongBan} loai="ban" />
+        <BangDoiTac ds={dt.ban} tong={dt.tongBan} loai="ban" nguonQuy={dt.nguonQuy} />
       </PhanThuGon>
 
       <PhanThuGon
@@ -392,7 +422,7 @@ export function TongQuanDN({ tq, tenCty, onMoQuy, layDoiTac }: {
         dong={dong}
         setDong={setDong}
       >
-        <BangDoiTac ds={dt.mua} tong={dt.tongMua} loai="mua" />
+        <BangDoiTac ds={dt.mua} tong={dt.tongMua} loai="mua" nguonQuy={dt.nguonQuy} />
       </PhanThuGon>
 
       {tq.chungTu.length > 0 && (

@@ -13,7 +13,7 @@ import { NapHangLoat, TongQuanDN } from './ui/TongQuan'
 import type { ToKhaiDaNop } from './core/docToKhai'
 import { coMay } from './may/firebase'
 import { dangNhap, dangXuat, useNguoiDung } from './may/useMay'
-import { boSungHoaDonTep, datCoTraVe, luuChungTu, luuCongTy, luuDaXuat, luuTepHoaDon, luuToKhai, taiDuLieuMay, taiTep, type DuLieuMay } from './may/dongBo'
+import { boSungHoaDonTep, boSungPhuLuc, datCoTraVe, luuChungTu, luuCongTy, luuDaXuat, luuTepHoaDon, luuToKhai, taiDuLieuMay, taiTep, type DuLieuMay } from './may/dongBo'
 import { KhoHoSo } from './ui/KhoHoSo'
 import { NHAN_GTGT, NHAN_TNCN, tien } from './core/nhan'
 import type { CanhBao, HoSoDN, KyKeKhai, LoaiHD } from './core/types'
@@ -79,10 +79,18 @@ export default function App() {
   const dangBoSung = useRef(false)
   async function boSungFileCu(uid: string, du: DuLieuMay) {
     const thieu = Object.entries(du.tepHoaDon).flatMap(([mst, ds]) => ds.filter((d) => !d.hd?.length && d.soBan + d.soMua > 0 && /\.(xlsx|xls|csv)$/i.test(d.ten)).map((d) => ({ mst, d })))
-    if (!thieu.length || dangBoSung.current) return
+    // Tờ khai 01/GTGT lưu bằng bản cũ chưa có phụ lục người mua / người bán
+    const thieuPL = du.toKhai.filter((t) => t.maTKhai === '842' && t.plMua === undefined && t.duongDan)
+    if ((!thieu.length && !thieuPL.length) || dangBoSung.current) return
     dangBoSung.current = true
     let xong = 0
     try {
+      for (const t of thieuPL) {
+        setTrangThaiMay(`Đang đọc phụ lục người mua / người bán của tờ khai cũ ${++xong}/${thieuPL.length}…`)
+        const tk = docToKhai(new TextDecoder().decode(await taiTep(t.duongDan)))
+        await boSungPhuLuc(uid, t.mst, t.id, tk.plMua.filter((d) => d.ten), tk.plBan.filter((d) => d.ten))
+      }
+      xong = 0
       for (const { mst: m, d } of thieu) {
         setTrangThaiMay(`Đang bổ sung dữ liệu hoá đơn cho file cũ ${++xong}/${thieu.length}…`)
         const buf = await taiTep(d.duongDan)
@@ -93,8 +101,10 @@ export default function App() {
         await boSungHoaDonTep(uid, m, d.id, rutGonHoaDon(p.hoaDon), soBan, p.hoaDon.length - soBan)
         capNhatKho((k) => napHoaDon(k, m, p.hoaDon))
       }
-      setTrangThaiMay(`☁️ Đã bổ sung dữ liệu hoá đơn cho ${thieu.length} file cũ.`)
-      setMay(await taiDuLieuMay(uid))
+      setTrangThaiMay(`☁️ Đã bổ sung dữ liệu cho ${thieuPL.length} tờ khai và ${thieu.length} file hoá đơn cũ.`)
+      const moi = await taiDuLieuMay(uid)
+      setMay(moi)
+      capNhatKho((k) => gopTuMay(k, moi.congTy, moi.toKhai, moi.chungTu, []))
     } catch (e) {
       setTrangThaiMay(`⚠️ Chưa bổ sung được dữ liệu hoá đơn cho file cũ: ${(e as Error).message}`)
     } finally {
@@ -337,7 +347,7 @@ export default function App() {
             const loai = mstCty === tl.hd.mstBan ? 'ban' : 'mua'
             const du = new TextEncoder().encode(text).buffer as ArrayBuffer
             const kyHD = quyNhieuNhat([tl.hd])
-            viec.push(() => luuTepHoaDon(uid, mstCty, f.name, du, kyHD, loai === 'ban' ? 1 : 0, loai === 'mua' ? 1 : 0, rutGonHoaDon([{ ...tl.hd, loai }])))
+            viec.push(() => luuTepHoaDon(uid, mstCty, f.name, du, kyHD, loai === 'ban' ? 1 : 0, loai === 'mua' ? 1 : 0, rutGonHoaDon([{ ...tl.hd, loai }], true)))
           }
         }
       } catch {

@@ -126,6 +126,14 @@ describe.skipIf(!coDuLieu || !caTQ)('Tổng quan dựng từ toàn bộ hồ sơ
       if (r.loi) loi.push(`${path.basename(f)}: ${r.moTa}`)
     }
     expect(loi).toEqual([]) // không file XML nào bị bỏ sót
+
+    // CHỈ có tờ khai (chưa nạp hoá đơn nào): khách hàng lấy từ phụ lục, tổng mỗi năm = doanh thu trên tờ khai
+    const tqChiTK = tinhTongQuan(kho, cfg!.mst, new Date(caTQ!.homNay))
+    for (const n of tqChiTK.nam.filter((x) => x.soQuyCoToKhai > 0)) {
+      const dt = tinhDoiTac(kho, cfg!.mst, n.nam)
+      expect(dt.tongBan, `khách hàng theo phụ lục ${n.nam}`).toBe(n.doanhThu)
+      // năm 2024 có vài hoá đơn XML lẻ: chưa đủ -> phải dùng phụ lục, không được dùng mấy hoá đơn lẻ đó
+    }
     const teps = files.filter((x) => /\.xlsx?$/i.test(x)).flatMap((f) => {
       const wb = XLSX.readFile(f)
       return wb.SheetNames.map((s) => docTep(XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[s], { header: 1, raw: true, defval: null }) as never, `${f}#${s}`)).filter((t): t is TepHoaDon => !!t)

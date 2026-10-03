@@ -116,9 +116,9 @@ describe('Đối tác', () => {
   it('gom theo đối tác, bỏ hoá đơn bị thay thế, tỷ trọng, số quý, ngày gần nhất', () => {
     const d = tinhDoiTac(kho, MST, 2025)
     expect(d.tongBan).toBe(1000)
-    expect(d.ban.map((x) => [x.mst, x.n, x.v, x.tyTrong, x.soQuy, x.dau, x.cuoi])).toEqual([
-      ['0300000001', 2, 800, 0.8, 2, '10/01/2025', '10/05/2025'],
-      ['0300000002', 1, 200, 0.2, 1, '10/08/2025', '10/08/2025'],
+    expect(d.ban.map((x) => [x.mst, x.n, x.v, x.tyTrong, x.soQuy, x.cuoi, x.tuToKhai])).toEqual([
+      ['0300000001', 2, 800, 0.8, 2, '10/05/2025', false],
+      ['0300000002', 1, 200, 0.2, 1, '10/08/2025', false],
     ])
     expect(d.mua).toMatchObject([{ mst: '0200000001', n: 1, v: 500, tyTrong: 1 }])
   })
@@ -126,5 +126,54 @@ describe('Đối tác', () => {
   it('tất cả các năm', () => {
     const d = tinhDoiTac(kho, MST, null)
     expect(d.ban.find((x) => x.mst === '0300000002')).toMatchObject({ n: 2, v: 300, soQuy: 2 })
+  })
+})
+
+describe('Đối tác lấy từ phụ lục tờ khai khi quý chưa có hoá đơn', () => {
+  const tkPL = (ky: string, ban: [string, number][], mua: [string, number, number][]) =>
+    tk(ky, { ct22: 0, ct40: 0, ct43: 0 }).replace(
+      '</CTieuTKhaiChinh>',
+      `</CTieuTKhaiChinh><PLuc><PL_NQ142_GTGT><HH_DV_MuaVaoTrongKy>${mua.map(([t, v, th]) => `<BangKeTenHHDV><tenHHDVMuaVao>${t}</tenHHDVMuaVao><giaTriHHDVMuaVao>${v}</giaTriHHDVMuaVao><thueGTGTHHDV>${th}</thueGTGTHHDV></BangKeTenHHDV>`).join('')}</HH_DV_MuaVaoTrongKy><HH_DV_BanRaTrongKy>${ban.map(([t, v]) => `<BangKeTenHHDV><tenHHDV>${t}</tenHHDV><giaTriHHDV>${v}</giaTriHHDV><thueSuatTheoQuyDinh>10</thueSuatTheoQuyDinh><thueSuatSauGiam>8</thueSuatSauGiam><thueGTGTDuocGiam>${v * 0.02}</thueGTGTDuocGiam></BangKeTenHHDV>`).join('')}</HH_DV_BanRaTrongKy></PL_NQ142_GTGT></PLuc>`,
+    )
+
+  const tuExcel = (so: string, ngay: string, ten: string, mstKhach: string, v: number): HoaDon => ({
+    loai: 'ban', kyHieuMau: '1', kyHieu: 'C25TAA', so, ngay, mstBan: MST, tenBan: 'Cty', mstMua: mstKhach, tenMua: ten,
+    chuaThue: v, thue: v * 0.08, trangThai: 'Hóa đơn mới', file: 'ds.xlsx',
+  })
+
+  it('quý chưa có hoá đơn: lấy từ phụ lục; quý có danh sách hoá đơn trọn kỳ: chỉ dùng hoá đơn (không cộng trùng)', () => {
+    let kho = nap(khoTrong(), tkPL('1/2025', [['CÔNG TY A', 1000]], [['NCC X', 500, 40]]))
+    kho = nap(kho, tkPL('3/2025', [['CÔNG TY A', 999_999]], [])) // quý 3 có Excel trọn kỳ -> bỏ phụ lục này
+    kho = napHoaDon(kho, MST, [tuExcel('7', '15/08/2025', 'Khách', '0300000001', 100_000_000)])
+    const d = tinhDoiTac(kho, MST, 2025)
+    expect(d.nguonQuy).toEqual([
+      { khoa: '2025-Q1', ban: 'toKhai', mua: 'toKhai' },
+      { khoa: '2025-Q3', ban: 'hoaDon', mua: 'thieu' },
+    ])
+    expect(d.tongBan).toBe(1000 + 100_000_000)
+    expect(d.ban.find((x) => x.ten === 'CÔNG TY A')).toMatchObject({ v: 1000, t: 80, n: 0, tuToKhai: true, cuoi: 'quý 1/2025', soQuy: 1 })
+    expect(d.mua).toMatchObject([{ ten: 'NCC X', v: 500, t: 40, tuToKhai: true }])
+  })
+
+  it('chỉ có vài hoá đơn XML lẻ: chưa đủ -> dùng phụ lục tờ khai', () => {
+    let kho = nap(khoTrong(), tkPL('3/2025', [['Khách', 100_000_000], ['CÔNG TY A', 50_000_000]], []))
+    kho = nap(kho, hoaDonXml) // 1 hoá đơn XML lẻ quý 3
+    const d = tinhDoiTac(kho, MST, 2025)
+    expect(d.nguonQuy).toEqual([{ khoa: '2025-Q3', ban: 'toKhaiThieuHD', mua: 'thieu' }])
+    expect(d.tongBan).toBe(150_000_000)
+  })
+
+  it('danh sách trọn kỳ được tin hơn tờ khai, kể cả khi tờ khai khai thừa', () => {
+    let kho = nap(khoTrong(), tkPL('3/2025', [['Khách', 190_000_000]], [])) // tờ khai khai thừa
+    kho = napHoaDon(kho, MST, [tuExcel('7', '15/08/2025', 'Khách', '0300000001', 100_000_000)])
+    expect(tinhDoiTac(kho, MST, 2025)).toMatchObject({ tongBan: 100_000_000, nguonQuy: [{ ban: 'hoaDon' }] })
+  })
+
+  it('tên trong phụ lục gộp vào đúng khách đã biết MST từ hoá đơn', () => {
+    let kho = nap(khoTrong(), tkPL('1/2025', [['Khách', 1000]], []))
+    kho = napHoaDon(kho, MST, [tuExcel('7', '15/08/2025', 'Khách', '0300000001', 100_000_000)]) // "Khách" có MST (quý 3)
+    const d = tinhDoiTac(kho, MST, 2025)
+    expect(d.ban).toHaveLength(1)
+    expect(d.ban[0]).toMatchObject({ mst: '0300000001', n: 1, v: 100_001_000, soQuy: 2, tuToKhai: true, cuoi: '15/08/2025' })
   })
 })

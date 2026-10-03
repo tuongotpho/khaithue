@@ -2,7 +2,7 @@
 // Nguồn: sổ tờ khai (01/GTGT, 05/KK-TNCN), chứng từ nộp tiền, hoá đơn rút gọn.
 
 import type { CanhBao, KyKeKhai } from './types'
-import { hanNop } from './ky'
+import { denNgay, hanNop } from './ky'
 import { khoaKy, soCai, tenKy, tinhTrangKy, type Kho, type PhienBanGTGT, type ToKhaiKhac } from './kho'
 import { kyCuaChungTu, type ChungTu } from './taiLieu'
 
@@ -187,25 +187,36 @@ export function tinhTongQuan(kho: Kho, mst: string, homNay = new Date()): TongQu
 }
 
 // ---------------- ĐỐI TÁC: khách hàng (bán ra) và nhà cung cấp (mua vào) ----------------
+// Hai nguồn, theo từng quý:
+//  - HOÁ ĐƠN (Excel/XML): chi tiết nhất — có MST, số hoá đơn, ngày.
+//  - PHỤ LỤC TỜ KHAI 01/GTGT: mục II = người mua, mục I = người bán (hàng 8%). Chỉ có tên, không có MST.
+// Mỗi quý, mỗi chiều: có hoá đơn từ DANH SÁCH TRỌN KỲ (Excel tải từ cổng hoá đơn) -> dùng hoá đơn
+// (kể cả khi lệch tờ khai: hoá đơn là gốc, tờ khai có thể khai sai). Chỉ có vài hoá đơn XML lẻ hoặc
+// không có hoá đơn -> dùng PHỤ LỤC tờ khai. (Không so số tiền: tờ khai khai thừa sẽ đánh lừa phép so.)
 
 export interface DongDoiTac {
   khoa: string
   ten: string
   mst: string
-  n: number // số hoá đơn
+  n: number // số hoá đơn (chỉ đếm được từ hoá đơn)
   v: number // giá trị chưa thuế
   t: number // thuế
   tyTrong: number // 0..1 trên tổng cùng chiều
-  dau: string // ngày giao dịch đầu (dd/MM/yyyy)
-  cuoi: string // ngày giao dịch gần nhất
+  cuoi: string // lần gần nhất: ngày hoá đơn, hoặc "quý 3/2025" nếu chỉ có từ tờ khai
   soQuy: number // số quý có giao dịch
+  tuToKhai: boolean // có phần số liệu lấy từ phụ lục tờ khai
 }
+
+/** toKhaiThieuHD: có hoá đơn nhưng chưa đủ so với tờ khai -> đã dùng phụ lục */
+export type NguonQuy = 'hoaDon' | 'toKhai' | 'toKhaiThieuHD' | 'thieu'
 
 export interface DoiTac {
   ban: DongDoiTac[]
   mua: DongDoiTac[]
   tongBan: number
   tongMua: number
+  /** Từng quý trong khoảng: lấy đối tác từ nguồn nào */
+  nguonQuy: { khoa: string; ban: NguonQuy; mua: NguonQuy }[]
 }
 
 const chuanTen = (s: string) => s.normalize('NFC').toUpperCase().replace(/\s+/g, ' ').trim()
@@ -213,43 +224,85 @@ const soNgay = (s: string) => {
   const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s)
   return m ? Number(m[3]) * 10000 + Number(m[2]) * 100 + Number(m[1]) : 0
 }
+const laHuy = (tt: string) => {
+  const t = tt.toLowerCase()
+  return t.includes('bị thay thế') || t.includes('xóa bỏ') || t.includes('hủy bỏ') || t.includes('xoá bỏ') || t.includes('huỷ bỏ')
+}
 
-/** Gom hoá đơn còn hiệu lực theo đối tác. `nam` = null: tất cả các năm */
+/** `nam` = null: tất cả các năm */
 export function tinhDoiTac(kho: Kho, mst: string, nam: number | null): DoiTac {
-  const ds = Object.values(kho.hoaDon?.[mst] ?? {}).filter((h) => {
-    const t = h.tt.toLowerCase()
-    if (t.includes('bị thay thế') || t.includes('xóa bỏ') || t.includes('hủy bỏ') || t.includes('xoá bỏ') || t.includes('huỷ bỏ')) return false
-    return nam === null || h.ng.endsWith(`/${nam}`)
-  })
-  // Tên -> MST (từ những hoá đơn có MST đối tác) để gom cùng một đối tác dù có hoá đơn thiếu MST
+  const tatCaHD = Object.values(kho.hoaDon?.[mst] ?? {}).filter((h) => !laHuy(h.tt))
+  const trongNam = (khoaQuy: string) => nam === null || khoaQuy.startsWith(`${nam}-`)
+
+  // Tên -> MST, học từ mọi hoá đơn có MST đối tác (để phụ lục tờ khai, vốn không có MST, gộp đúng đối tác)
   const mstTheoTen = new Map<string, string>()
-  for (const h of ds) {
+  for (const h of tatCaHD) {
     const m = h.l === 'ban' ? h.mm : h.mb
     if (m) mstTheoTen.set(chuanTen(h.ten), m)
   }
-  const gom = (l: 'ban' | 'mua') => {
-    const nhom = new Map<string, DongDoiTac & { quy: Set<string> }>()
-    for (const h of ds.filter((x) => x.l === l)) {
-      const m = (l === 'ban' ? h.mm : h.mb) || mstTheoTen.get(chuanTen(h.ten)) || ''
-      const khoa = m || chuanTen(h.ten)
-      const g = nhom.get(khoa) ?? { khoa, ten: h.ten, mst: m, n: 0, v: 0, t: 0, tyTrong: 0, dau: h.ng, cuoi: h.ng, soQuy: 0, quy: new Set<string>() }
-      g.n++
-      g.v += h.v
-      g.t += h.t
-      if (soNgay(h.ng) < soNgay(g.dau)) g.dau = h.ng
-      if (soNgay(h.ng) > soNgay(g.cuoi)) {
-        g.cuoi = h.ng
-        g.ten = h.ten // lấy tên trên hoá đơn mới nhất
-      }
-      const q = quyCuaNgay(h.ng)
-      if (q) g.quy.add(q)
-      nhom.set(khoa, g)
-    }
-    const tong = [...nhom.values()].reduce((s, g) => s + g.v, 0)
-    const kq = [...nhom.values()].map(({ quy, ...g }) => ({ ...g, soQuy: quy.size, tyTrong: tong ? g.v / tong : 0 })).sort((a, b) => b.v - a.v)
-    return { kq, tong }
+
+  // Hoá đơn theo quý + chiều
+  const hdTheoQuy = new Map<string, typeof tatCaHD>()
+  for (const h of tatCaHD) {
+    const q = quyCuaNgay(h.ng)
+    if (!q || !trongNam(q)) continue
+    const k = `${q}|${h.l}`
+    hdTheoQuy.set(k, [...(hdTheoQuy.get(k) ?? []), h])
   }
-  const b = gom('ban')
-  const m = gom('mua')
-  return { ban: b.kq, mua: m.kq, tongBan: b.tong, tongMua: m.tong }
+
+  type Nhom = DongDoiTac & { quy: Set<string>; ngayCuoi: number }
+  const nhom = { ban: new Map<string, Nhom>(), mua: new Map<string, Nhom>() }
+  const them = (l: 'ban' | 'mua', ten: string, mstDT: string, v: number, t: number, q: string, ngay: string, laHD: boolean) => {
+    const m = mstDT || mstTheoTen.get(chuanTen(ten)) || ''
+    const khoa = m || chuanTen(ten)
+    const g: Nhom = nhom[l].get(khoa) ?? { khoa, ten, mst: m, n: 0, v: 0, t: 0, tyTrong: 0, cuoi: '', soQuy: 0, tuToKhai: false, quy: new Set(), ngayCuoi: 0 }
+    if (laHD) g.n++
+    else g.tuToKhai = true
+    g.v += v
+    g.t += t
+    g.quy.add(q)
+    const sn = laHD ? soNgay(ngay) : soNgay(denNgay(tuChuoi(q)))
+    if (sn >= g.ngayCuoi) {
+      g.ngayCuoi = sn
+      g.cuoi = laHD ? ngay : `quý ${tenKy(q)}`
+      g.ten = ten
+    }
+    nhom[l].set(khoa, g)
+  }
+
+  const nguonQuy: DoiTac['nguonQuy'] = []
+  const cacQuy = new Set(
+    [...Object.keys(kho.gtgt[mst] ?? {}), ...[...hdTheoQuy.keys()].map((k) => k.split('|')[0])].filter((k) => /^\d{4}-Q\d$/.test(k) && trongNam(k)),
+  )
+  for (const k of [...cacQuy].sort()) {
+    const tt = tinhTrangKy(kho, mst, k)
+    const pb = tt.boSungMoiNhat ?? tt.lanDau
+    const ng: { khoa: string; ban: NguonQuy; mua: NguonQuy } = { khoa: k, ban: 'thieu', mua: 'thieu' }
+    for (const l of ['ban', 'mua'] as const) {
+      const dsHD = hdTheoQuy.get(`${k}|${l}`) ?? []
+      const pl = l === 'ban' ? (pb?.plBan ?? []).map((d) => ({ ten: d.ten, v: d.giaTri, t: d.thueGiam * 4 })) : (pb?.plMua ?? []).map((d) => ({ ten: d.ten, v: d.giaTri, t: d.thue }))
+      const tronKy = dsHD.some((h) => !h.x)
+      if (tronKy || (dsHD.length && !pl.length)) {
+        ng[l] = 'hoaDon'
+        for (const h of dsHD) them(l, h.ten, l === 'ban' ? h.mm ?? '' : h.mb, h.v, h.t, k, h.ng, true)
+      } else if (pl.length) {
+        // thuế bán ra 8% của dòng = 4 × số thuế được giảm 2% (đúng theo cách lập phụ lục)
+        ng[l] = dsHD.length ? 'toKhaiThieuHD' : 'toKhai'
+        for (const d of pl) them(l, d.ten, '', d.v, d.t, k, '', false)
+      }
+    }
+    nguonQuy.push(ng)
+  }
+
+  const xep = (l: 'ban' | 'mua') => {
+    const ds = [...nhom[l].values()]
+    const tong = ds.reduce((s, g) => s + g.v, 0)
+    return {
+      tong,
+      kq: ds.map(({ quy, ngayCuoi, ...g }) => (void ngayCuoi, { ...g, soQuy: quy.size, tyTrong: tong ? g.v / tong : 0 })).sort((a, b) => b.v - a.v),
+    }
+  }
+  const b = xep('ban')
+  const m = xep('mua')
+  return { ban: b.kq, mua: m.kq, tongBan: b.tong, tongMua: m.tong, nguonQuy }
 }

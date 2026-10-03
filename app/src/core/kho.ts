@@ -26,6 +26,9 @@ export interface PhienBanGTGT {
   ct35?: number
   ct23?: number
   ct24?: number
+  /** Phụ lục giảm thuế: mục I (người bán, hàng mua vào 8%) và mục II (người mua). undefined = chưa đọc */
+  plMua?: { ten: string; giaTri: number; thue: number }[]
+  plBan?: { ten: string; giaTri: number; thueGiam: number }[]
   nguon: 'xml' | 'app'
   tenFile: string
   /** Người dùng đánh dấu: cơ quan thuế KHÔNG chấp nhận bản này -> không dùng */
@@ -57,6 +60,8 @@ export interface HoaDonGon {
   l: 'ban' | 'mua'
   mb: string // MST người bán (để nhận dạng hoá đơn mua vào)
   mm?: string // MST người mua (để gom khách hàng; dữ liệu cũ có thể thiếu)
+  /** 1 = chỉ biết từ file hoá đơn XML lẻ (không phải danh sách trọn kỳ) */
+  x?: 1
   kh: string
   so: string
   ng: string // dd/MM/yyyy
@@ -138,6 +143,8 @@ export function napToKhai(kho0: Kho, tk: ToKhaiDaNop, tenFile: string, id?: stri
     ct35: tk.ct.ct35 ?? 0,
     ct23: tk.ct.ct23 ?? 0,
     ct24: tk.ct.ct24 ?? 0,
+    plMua: tk.plMua.filter((d) => d.ten),
+    plBan: tk.plBan.filter((d) => d.ten),
     nguon: 'xml',
     tenFile,
     ids: id ? [id] : [],
@@ -250,6 +257,8 @@ export interface ToKhaiMay {
   mst: string
   maTKhai: string
   tenTKhai?: string
+  plMua?: { ten: string; giaTri: number; thue: number }[]
+  plBan?: { ten: string; giaTri: number; thueGiam: number }[]
   ky: string // yyyy-Qn
   loaiTKhai: string
   soLan: number
@@ -280,8 +289,16 @@ export function gopTuMay(
     if (!m) continue
     kho = napToKhai(kho, {
       maTKhai: t.maTKhai, loaiTKhai: t.loaiTKhai, soLan: t.soLan, ngayLap: t.ngayLap,
-      ky: { quy: Number(m[2]) as 1 | 2 | 3 | 4, nam: Number(m[1]) }, hoSo, ct: t.ct, plMua: [], plBan: [], ct9: null,
+      ky: { quy: Number(m[2]) as 1 | 2 | 3 | 4, nam: Number(m[1]) }, hoSo, ct: t.ct, plMua: t.plMua ?? [], plBan: t.plBan ?? [], ct9: null,
     }, t.tenFile, t.id).kho
+    if (!t.plMua && !t.plBan) {
+      // bản ghi cũ trên mây chưa có phụ lục: đánh dấu "chưa đọc" (khác với phụ lục rỗng)
+      const pb = kho.gtgt[t.mst]?.[t.ky]?.find((x) => x.ids?.includes(t.id))
+      if (pb && !pb.plMua?.length && !pb.plBan?.length) {
+        delete pb.plMua
+        delete pb.plBan
+      }
+    }
     if (t.khongChapNhan) {
       const ds = kho.gtgt[t.mst]?.[t.ky] ?? []
       const i = ds.findIndex((x) => x.ids?.includes(t.id))
@@ -290,7 +307,10 @@ export function gopTuMay(
   }
   kho = structuredClone(kho)
   for (const c of chungTu) ((kho.chungTu ??= {})[c.mst] ??= {})[c.so] = c
-  for (const { mst, hd } of hoaDon) kho = napHoaDon(kho, mst, hd.map((g) => moRongHoaDon(g, mst)))
+  for (const { mst, hd } of hoaDon) {
+    kho = napHoaDon(kho, mst, hd.filter((g) => !g.x).map((g) => moRongHoaDon(g, mst)))
+    kho = napHoaDon(kho, mst, hd.filter((g) => g.x).map((g) => moRongHoaDon(g, mst)), true)
+  }
   kho = structuredClone(kho)
   // Thông tin công ty trên mây là bản người dùng đã chốt -> ưu tiên
   for (const c of congTy) kho.congTy[c.hoSo.mst] = structuredClone(c)
@@ -304,14 +324,16 @@ const khoaGon = (h: Pick<HoaDon, 'loai' | 'mstBan' | 'kyHieu' | 'so'>) =>
   `${h.loai}|${h.loai === 'ban' ? '' : h.mstBan}|${h.kyHieu}|${Number(h.so) || h.so}`
 
 /** Nạp hoá đơn (đã biết bán/mua) vào sổ rút gọn. Trùng thì giữ trạng thái "bị thay thế/huỷ" nếu có. */
-export function napHoaDon(kho0: Kho, mst: string, ds: HoaDon[]): Kho {
+export function napHoaDon(kho0: Kho, mst: string, ds: HoaDon[], tuXmlLe = false): Kho {
   const kho: Kho = structuredClone(kho0)
   const nhom = ((kho.hoaDon ??= {})[mst] ??= {})
   for (const h of ds) {
     const k = khoaGon(h)
     const cu = nhom[k]
     if (cu && conHieuLuc({ trangThai: cu.tt } as HoaDon) === false && conHieuLuc(h)) continue
-    nhom[k] = { l: h.loai, mb: h.mstBan, mm: h.mstMua, kh: h.kyHieu, so: h.so, ng: h.ngay, ten: h.loai === 'ban' ? h.tenMua : h.tenBan, v: h.chuaThue, t: h.thue, tt: h.trangThai }
+    // Đã có từ danh sách trọn kỳ (Excel) thì giữ, không để bản XML lẻ ghi đè dấu "trọn kỳ"
+    if (cu && !cu.x && tuXmlLe) continue
+    nhom[k] = { ...(tuXmlLe ? { x: 1 as const } : {}), l: h.loai, mb: h.mstBan, mm: h.mstMua, kh: h.kyHieu, so: h.so, ng: h.ngay, ten: h.loai === 'ban' ? h.tenMua : h.tenBan, v: h.chuaThue, t: h.thue, tt: h.trangThai }
   }
   return kho
 }
@@ -346,7 +368,7 @@ export function napTaiLieu(kho0: Kho, tl: TaiLieu, tenFile: string, id?: string)
     const mst = kho0.congTy[h.mstBan] ? h.mstBan : kho0.congTy[h.mstMua] ? h.mstMua : null
     if (!mst) return { kho: kho0, moTa: `Hoá đơn ${h.kyHieu}-${h.so}: chưa biết của công ty nào — nạp tờ khai XML của công ty trước`, loi: true }
     const loai = mst === h.mstBan ? 'ban' : 'mua'
-    return { kho: napHoaDon(kho0, mst, [{ ...h, loai, file: tenFile }]), moTa: `Hoá đơn ${loai === 'ban' ? 'bán ra' : 'mua vào'} ${h.kyHieu}-${h.so} ngày ${h.ngay}` }
+    return { kho: napHoaDon(kho0, mst, [{ ...h, loai, file: tenFile }], true), moTa: `Hoá đơn ${loai === 'ban' ? 'bán ra' : 'mua vào'} ${h.kyHieu}-${h.so} ngày ${h.ngay}` }
   }
   return { kho: kho0, moTa: `File XML loại "${tl.goc}" — chưa đọc được loại này`, loi: true }
 }
@@ -362,6 +384,6 @@ export function moRongHoaDon(g: HoaDonGon, mst: string): HoaDon {
 }
 
 /** Rút gọn danh sách hoá đơn để lưu lên mây cùng file Excel */
-export function rutGonHoaDon(ds: HoaDon[]): HoaDonGon[] {
-  return ds.map((h) => ({ l: h.loai, mb: h.mstBan, mm: h.mstMua, kh: h.kyHieu, so: h.so, ng: h.ngay, ten: h.loai === 'ban' ? h.tenMua : h.tenBan, v: h.chuaThue, t: h.thue, tt: h.trangThai }))
+export function rutGonHoaDon(ds: HoaDon[], tuXmlLe = false): HoaDonGon[] {
+  return ds.map((h) => ({ ...(tuXmlLe ? { x: 1 as const } : {}), l: h.loai, mb: h.mstBan, mm: h.mstMua, kh: h.kyHieu, so: h.so, ng: h.ngay, ten: h.loai === 'ban' ? h.tenMua : h.tenBan, v: h.chuaThue, t: h.thue, tt: h.trangThai }))
 }

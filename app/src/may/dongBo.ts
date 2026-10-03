@@ -42,7 +42,7 @@ export async function luuToKhai(uid: string, tk: ToKhaiDaNop, xml: string, tenFi
   // merge: giữ nguyên cờ "CQT trả về" nếu đã đánh dấu trước đó
   await setDoc(doc(db, `${nhanhCongTy(uid, mst)}/toKhai/${id}`), {
     mst, maTKhai: tk.maTKhai, tenTKhai: them.tenTKhai ?? '', ky: them.kyChu ?? (tk.ky ? khoaKy(tk.ky) : ''), loaiTKhai: tk.loaiTKhai, soLan: tk.soLan, ngayLap: tk.ngayLap,
-    ct: tk.ct, tenFile, duongDan, napLuc: serverTimestamp(),
+    ct: tk.ct, plMua: tk.plMua.filter((d) => d.ten), plBan: tk.plBan.filter((d) => d.ten), tenFile, duongDan, napLuc: serverTimestamp(),
   }, { merge: true })
   return id
 }
@@ -95,6 +95,11 @@ export async function luuChungTu(uid: string, ct: ChungTu, xml: string, tenFile:
 /** Bổ sung danh sách hoá đơn rút gọn cho file đã lưu trước đây (bản cũ chưa có) */
 export async function boSungHoaDonTep(uid: string, mst: string, id: string, hd: HoaDonGon[], soBan: number, soMua: number) {
   await updateDoc(doc(db, `${nhanhCongTy(uid, mst)}/tepHoaDon/${id}`), { hd, soBan, soMua })
+}
+
+/** Bổ sung phụ lục (người mua / người bán) cho tờ khai lưu bằng bản cũ */
+export async function boSungPhuLuc(uid: string, mst: string, id: string, plMua: ToKhaiDaNop['plMua'], plBan: ToKhaiDaNop['plBan']) {
+  await updateDoc(doc(db, `${nhanhCongTy(uid, mst)}/toKhai/${id}`), { plMua, plBan })
 }
 
 export async function datCoTraVe(uid: string, mst: string, ids: string[], gt: boolean) {
