@@ -48,8 +48,7 @@ npm run dong-goi   # build + chép thành KeKhaiThue.html (bản dùng không c�
 - Vercel nối với repo thì **tự deploy mỗi lần push**. Cấu hình nằm sẵn trong `vercel.json`, không phải chỉnh gì trên Vercel. Test hỏng thì Vercel không đưa bản lỗi lên.
 - `du-lieu-rieng/` (dữ liệu thật để đối chiếu) đã bị loại khỏi git trong `.gitignore`.
 
-```
-```
+## Cấu trúc
 
 - `app/src/core/`: phần tính toán, không phụ thuộc giao diện.
 - `reference/htkk/`: XSD và mẫu XML chép từ bộ cài HTKK (bản 2.8.3 cho GTGT, 2.9.3 cho TNCN).
