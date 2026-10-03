@@ -177,3 +177,13 @@ describe('Đối tác lấy từ phụ lục tờ khai khi quý chưa có hoá �
     expect(d.ban[0]).toMatchObject({ mst: '0300000001', n: 1, v: 100_001_000, soQuy: 2, tuToKhai: true, cuoi: '15/08/2025' })
   })
 })
+
+import { chuanTen } from './tongQuan'
+
+describe('So tên doanh nghiệp viết tắt', () => {
+  it('CP / Cổ phần, CTY / Công ty, MTV, TM, DV... là một', () => {
+    expect(chuanTen('Công ty CP Năng lượng xanh Thăng Long')).toBe(chuanTen('CÔNG TY CỔ PHẦN NĂNG LƯỢNG XANH THĂNG LONG'))
+    expect(chuanTen('Cty TNHH MTV  TM-DV Hà An')).toBe(chuanTen('CÔNG TY TNHH MỘT THÀNH VIÊN THƯƠNG MẠI DỊCH VỤ HÀ AN'))
+    expect(chuanTen('Công ty TNHH Năng lượng VNG')).not.toBe(chuanTen('Công ty TNHH Năng lượng VNC'))
+  })
+})

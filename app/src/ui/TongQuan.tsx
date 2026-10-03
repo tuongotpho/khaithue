@@ -244,7 +244,9 @@ function BangDoiTac({ ds, tong, loai, nguonQuy }: { ds: DongDoiTac[]; tong: numb
                   {d.tuToKhai && <span className="ml-1 rounded bg-slate-100 px-1 text-xs text-slate-600" title="Có phần số liệu lấy từ phụ lục tờ khai 01/GTGT">theo tờ khai</span>}
                 </td>
                 <td className="p-1 tabular-nums text-slate-500">{d.mst || '—'}</td>
-                <td className="p-1 text-right tabular-nums">{d.n || '—'}</td>
+                <td className="p-1 text-right tabular-nums" title={d.tuToKhai ? 'Chỉ đếm được hoá đơn ở các quý đã nạp danh sách hoá đơn; các quý lấy từ phụ lục tờ khai không có số hoá đơn' : undefined}>
+                  {d.n ? `${d.n}${d.tuToKhai ? '+' : ''}` : '—'}
+                </td>
                 <td className="p-1 text-right tabular-nums">{tien(d.v)}</td>
                 <td className="p-1 text-right tabular-nums">{tien(d.t)}</td>
                 <td className="p-1">

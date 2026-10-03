@@ -219,7 +219,27 @@ export interface DoiTac {
   nguonQuy: { khoa: string; ban: NguonQuy; mua: NguonQuy }[]
 }
 
-const chuanTen = (s: string) => s.normalize('NFC').toUpperCase().replace(/\s+/g, ' ').trim()
+// Chữ viết tắt hay gặp trong tên doanh nghiệp (phụ lục tờ khai hay viết tắt, hoá đơn thì viết đủ).
+// So khớp theo TỪ NGUYÊN VẸN (tách bằng dấu cách) — không đổi nhầm chữ nằm trong từ khác (vd "VNG", "STM").
+const VIET_TAT: Record<string, string> = {
+  CTY: 'CÔNG TY',
+  CP: 'CỔ PHẦN',
+  MTV: 'MỘT THÀNH VIÊN',
+  TM: 'THƯƠNG MẠI',
+  DV: 'DỊCH VỤ',
+  SX: 'SẢN XUẤT',
+  XD: 'XÂY DỰNG',
+  XNK: 'XUẤT NHẬP KHẨU',
+}
+export const chuanTen = (s: string) =>
+  s
+    .normalize('NFC')
+    .toUpperCase()
+    .replace(/[.,;:()"'“”&-]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((tu) => VIET_TAT[tu] ?? tu)
+    .join(' ')
 const soNgay = (s: string) => {
   const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s)
   return m ? Number(m[3]) * 10000 + Number(m[2]) * 100 + Number(m[1]) : 0
