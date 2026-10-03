@@ -7,8 +7,10 @@
 //   "Chỉ tiêu [22] NNT kê khai phải = Chỉ tiêu [43] trên TK lần đầu của kỳ liền kề trước"
 // => [22] lấy từ bản LẦN ĐẦU. Khai bổ sung kỳ trước làm đổi [43] thì phần chênh không đưa vào [22].
 
-import type { HoSoDN, KyKeKhai } from './types'
+import type { HoaDon, HoSoDN, KyKeKhai } from './types'
 import type { ToKhaiDaNop } from './docToKhai'
+import type { ChungTu, TaiLieu } from './taiLieu'
+import { conHieuLuc } from './excel'
 
 export interface PhienBanGTGT {
   loaiTKhai: 'C' | 'B'
@@ -19,6 +21,11 @@ export interface PhienBanGTGT {
   ct40: number
   ct41: number
   ct43: number
+  /** Thêm cho tổng quan: doanh thu [34], thuế đầu ra [35], mua vào [23], thuế đầu vào [24] */
+  ct34?: number
+  ct35?: number
+  ct23?: number
+  ct24?: number
   nguon: 'xml' | 'app'
   tenFile: string
   /** Người dùng đánh dấu: cơ quan thuế KHÔNG chấp nhận bản này -> không dùng */
@@ -34,12 +41,40 @@ export interface CongTyLuu {
   suaTay: boolean
 }
 
+/** Tờ khai loại khác (môn bài, quyết toán, BCTC...) — lưu để liệt kê, chưa tính toán */
+export interface ToKhaiKhac {
+  maTKhai: string
+  tenTKhai: string
+  ky: string // 2025, 2025-Q3, 2025-M07
+  loaiTKhai: string
+  soLan: number
+  ngayLap: string
+  tenFile: string
+}
+
+/** Hoá đơn rút gọn để làm tổng quan (đối chiếu doanh thu tờ khai với hoá đơn) */
+export interface HoaDonGon {
+  l: 'ban' | 'mua'
+  mb: string // MST người bán (để nhận dạng hoá đơn mua vào)
+  kh: string
+  so: string
+  ng: string // dd/MM/yyyy
+  ten: string // tên đối tác
+  v: number // chưa thuế
+  t: number // thuế
+  tt: string // trạng thái
+}
+
 export interface Kho {
   phienBan: 1
   chon: string | null
   congTy: Record<string, CongTyLuu>
   gtgt: Record<string, Record<string, PhienBanGTGT[]>>
   tncn: Record<string, Record<string, Record<string, number>>>
+  /** Thêm từ bản có tổng quan — sổ cũ không có thì coi như rỗng */
+  toKhaiKhac?: Record<string, Record<string, ToKhaiKhac>>
+  chungTu?: Record<string, Record<string, ChungTu>>
+  hoaDon?: Record<string, Record<string, HoaDonGon>>
 }
 
 export const khoTrong = (): Kho => ({ phienBan: 1, chon: null, congTy: {}, gtgt: {}, tncn: {} })
@@ -98,6 +133,10 @@ export function napToKhai(kho0: Kho, tk: ToKhaiDaNop, tenFile: string, id?: stri
     ct40: tk.ct.ct40 ?? 0,
     ct41: tk.ct.ct41 ?? 0,
     ct43: tk.ct.ct43 ?? 0,
+    ct34: tk.ct.ct34 ?? 0,
+    ct35: tk.ct.ct35 ?? 0,
+    ct23: tk.ct.ct23 ?? 0,
+    ct24: tk.ct.ct24 ?? 0,
     nguon: 'xml',
     tenFile,
     ids: id ? [id] : [],
@@ -120,7 +159,7 @@ export function ghiAppXuat(kho0: Kho, mst: string, ky: KyKeKhai, ct: Record<stri
   if (ds.some((x) => x.nguon === 'xml' && x.loaiTKhai === 'C' && !x.khongChapNhan)) return kho
   kho.gtgt[mst][khoaKy(ky)] = [
     ...ds.filter((x) => x.nguon !== 'app'),
-    { loaiTKhai: 'C', soLan: 0, ngayLap: '', ct22: ct.ct22, ct36: ct.ct36, ct40: ct.ct40, ct41: ct.ct41, ct43: ct.ct43, nguon: 'app', tenFile: '(app xuất, chưa nạp file đã nộp)' },
+    { loaiTKhai: 'C', soLan: 0, ngayLap: '', ct22: ct.ct22, ct36: ct.ct36, ct40: ct.ct40, ct41: ct.ct41, ct43: ct.ct43, ct34: ct.ct34, ct35: ct.ct35, ct23: ct.ct23, ct24: ct.ct24, nguon: 'app', tenFile: '(app xuất, chưa nạp file đã nộp)' },
   ]
   return kho
 }
@@ -209,6 +248,7 @@ export interface ToKhaiMay {
   id: string
   mst: string
   maTKhai: string
+  tenTKhai?: string
   ky: string // yyyy-Qn
   loaiTKhai: string
   soLan: number
@@ -219,13 +259,24 @@ export interface ToKhaiMay {
 }
 
 /** Gộp dữ liệu trên mây vào sổ trên máy (hợp nhất, không xoá gì của máy) */
-export function gopTuMay(kho0: Kho, congTy: CongTyLuu[], toKhai: ToKhaiMay[]): Kho {
+export function gopTuMay(
+  kho0: Kho,
+  congTy: CongTyLuu[],
+  toKhai: ToKhaiMay[],
+  chungTu: ChungTu[] = [],
+  hoaDon: { mst: string; hd: HoaDonGon[] }[] = [],
+): Kho {
   let kho = kho0
   for (const t of toKhai) {
-    const m = /^(\d{4})-Q(\d)$/.exec(t.ky)
-    if (!m) continue
     const hoSo = congTy.find((c) => c.hoSo.mst === t.mst)?.hoSo ?? kho.congTy[t.mst]?.hoSo
     if (!hoSo) continue
+    if (t.maTKhai !== '842' && t.maTKhai !== '864') {
+      kho = structuredClone(kho)
+      ;((kho.toKhaiKhac ??= {})[t.mst] ??= {})[khoaKhac(t.maTKhai, t.ky, t.loaiTKhai, t.soLan)] = { maTKhai: t.maTKhai, tenTKhai: t.tenTKhai ?? '', ky: t.ky, loaiTKhai: t.loaiTKhai, soLan: t.soLan, ngayLap: t.ngayLap, tenFile: t.tenFile }
+      continue
+    }
+    const m = /^(\d{4})-Q(\d)$/.exec(t.ky)
+    if (!m) continue
     kho = napToKhai(kho, {
       maTKhai: t.maTKhai, loaiTKhai: t.loaiTKhai, soLan: t.soLan, ngayLap: t.ngayLap,
       ky: { quy: Number(m[2]) as 1 | 2 | 3 | 4, nam: Number(m[1]) }, hoSo, ct: t.ct, plMua: [], plBan: [], ct9: null,
@@ -237,8 +288,79 @@ export function gopTuMay(kho0: Kho, congTy: CongTyLuu[], toKhai: ToKhaiMay[]): K
     }
   }
   kho = structuredClone(kho)
+  for (const c of chungTu) ((kho.chungTu ??= {})[c.mst] ??= {})[c.so] = c
+  for (const { mst, hd } of hoaDon) kho = napHoaDon(kho, mst, hd.map((g) => moRongHoaDon(g, mst)))
+  kho = structuredClone(kho)
   // Thông tin công ty trên mây là bản người dùng đã chốt -> ưu tiên
   for (const c of congTy) kho.congTy[c.hoSo.mst] = structuredClone(c)
   if (!kho.chon && congTy[0]) kho.chon = congTy[0].hoSo.mst
   return kho
+}
+
+// Hoá đơn BÁN RA đều là của chính công ty -> nhận dạng bằng ký hiệu + số (file Excel kiểu cũ bỏ trống MST
+// của mình, file XML thì có: nếu ghép cả MST vào khoá thì cùng một hoá đơn bị tính 2 lần)
+const khoaGon = (h: Pick<HoaDon, 'loai' | 'mstBan' | 'kyHieu' | 'so'>) =>
+  `${h.loai}|${h.loai === 'ban' ? '' : h.mstBan}|${h.kyHieu}|${Number(h.so) || h.so}`
+
+/** Nạp hoá đơn (đã biết bán/mua) vào sổ rút gọn. Trùng thì giữ trạng thái "bị thay thế/huỷ" nếu có. */
+export function napHoaDon(kho0: Kho, mst: string, ds: HoaDon[]): Kho {
+  const kho: Kho = structuredClone(kho0)
+  const nhom = ((kho.hoaDon ??= {})[mst] ??= {})
+  for (const h of ds) {
+    const k = khoaGon(h)
+    const cu = nhom[k]
+    if (cu && conHieuLuc({ trangThai: cu.tt } as HoaDon) === false && conHieuLuc(h)) continue
+    nhom[k] = { l: h.loai, mb: h.mstBan, kh: h.kyHieu, so: h.so, ng: h.ngay, ten: h.loai === 'ban' ? h.tenMua : h.tenBan, v: h.chuaThue, t: h.thue, tt: h.trangThai }
+  }
+  return kho
+}
+
+const khoaKhac = (ma: string, ky: string, loai: string, lan: number) => `${ma}|${ky}|${loai}|${lan}`
+
+/** Nạp bất kỳ tài liệu XML nào đã đọc bằng docTaiLieu() */
+export function napTaiLieu(kho0: Kho, tl: TaiLieu, tenFile: string, id?: string): KetQuaNap {
+  if (tl.loai === 'toKhai') {
+    if (tl.tk.maTKhai === '842' || tl.tk.maTKhai === '864') return napToKhai(kho0, tl.tk, tenFile, id)
+    const mst = tl.tk.hoSo.mst
+    if (!mst) return { kho: kho0, moTa: 'Tờ khai không có MST', loi: true }
+    const kho: Kho = structuredClone(kho0)
+    kho.congTy[mst] = gopHoSo(kho.congTy[mst], tl.tk.hoSo, tl.kyChu.slice(0, 7))
+    if (!kho.chon) kho.chon = mst
+    // Cùng mẫu + kỳ + loại + lần = cùng một tờ khai (dù nạp từ file hay từ mây)
+    const khoa = khoaKhac(tl.tk.maTKhai, tl.kyChu, tl.tk.loaiTKhai, tl.tk.soLan)
+    ;((kho.toKhaiKhac ??= {})[mst] ??= {})[khoa] = {
+      maTKhai: tl.tk.maTKhai, tenTKhai: tl.tenTKhai, ky: tl.kyChu, loaiTKhai: tl.tk.loaiTKhai, soLan: tl.tk.soLan, ngayLap: tl.tk.ngayLap, tenFile,
+    }
+    return { kho, moTa: `${tl.tenTKhai || 'Tờ khai mã ' + tl.tk.maTKhai} — kỳ ${tl.kyChu} (lưu trữ)` }
+  }
+  if (tl.loai === 'chungTu') {
+    const mst = tl.ct.mst
+    if (!mst) return { kho: kho0, moTa: 'Chứng từ không có MST', loi: true }
+    const kho: Kho = structuredClone(kho0)
+    ;((kho.chungTu ??= {})[mst] ??= {})[tl.ct.so] = tl.ct
+    return { kho, moTa: `Chứng từ nộp tiền số ${tl.ct.so} ngày ${tl.ct.ngay}: ${tl.ct.tong.toLocaleString('vi-VN')} đ` }
+  }
+  if (tl.loai === 'hoaDon') {
+    const h = tl.hd
+    const mst = kho0.congTy[h.mstBan] ? h.mstBan : kho0.congTy[h.mstMua] ? h.mstMua : null
+    if (!mst) return { kho: kho0, moTa: `Hoá đơn ${h.kyHieu}-${h.so}: chưa biết của công ty nào — nạp tờ khai XML của công ty trước`, loi: true }
+    const loai = mst === h.mstBan ? 'ban' : 'mua'
+    return { kho: napHoaDon(kho0, mst, [{ ...h, loai, file: tenFile }]), moTa: `Hoá đơn ${loai === 'ban' ? 'bán ra' : 'mua vào'} ${h.kyHieu}-${h.so} ngày ${h.ngay}` }
+  }
+  return { kho: kho0, moTa: `File XML loại "${tl.goc}" — chưa đọc được loại này`, loi: true }
+}
+
+/** Hoá đơn rút gọn -> dạng đầy đủ tối thiểu (để nạp lại từ mây) */
+export function moRongHoaDon(g: HoaDonGon, mst: string): HoaDon {
+  return {
+    loai: g.l, kyHieuMau: '', kyHieu: g.kh, so: g.so, ngay: g.ng,
+    mstBan: g.l === 'ban' ? mst : g.mb, tenBan: g.l === 'ban' ? '' : g.ten,
+    mstMua: g.l === 'mua' ? mst : '', tenMua: g.l === 'ban' ? g.ten : '',
+    chuaThue: g.v, thue: g.t, trangThai: g.tt, file: '',
+  }
+}
+
+/** Rút gọn danh sách hoá đơn để lưu lên mây cùng file Excel */
+export function rutGonHoaDon(ds: HoaDon[]): HoaDonGon[] {
+  return ds.map((h) => ({ l: h.loai, mb: h.mstBan, kh: h.kyHieu, so: h.so, ng: h.ngay, ten: h.loai === 'ban' ? h.tenMua : h.tenBan, v: h.chuaThue, t: h.thue, tt: h.trangThai }))
 }

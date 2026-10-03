@@ -2,6 +2,21 @@
 
 App làm 2 tờ khai quý: **01/GTGT** (kèm phụ lục giảm thuế 10% → 8%) và **05/KK-TNCN**, xuất file XML để nộp trên thuedientu.gdt.gov.vn.
 
+## Tổng quan doanh nghiệp (tab 📊)
+
+Nạp **toàn bộ hồ sơ thuế từ năm thành lập** (chọn cả thư mục): tờ khai XML mọi mẫu, chứng từ nộp tiền XML, hoá đơn XML, Excel “Danh sách hóa đơn”. App:
+
+- lập sổ từng quý: tờ khai 01/GTGT (lần đầu / bổ sung / bị trả về / thiếu), TNCN, doanh thu, hoá đơn bán ra, phải nộp, đã nộp, đầu kỳ;
+- thẻ số liệu theo năm + biểu đồ doanh thu / mua vào theo quý;
+- **cảnh báo cần xử lý**: thiếu tờ khai quý đã quá hạn, nộp thiếu so với chứng từ, doanh thu tờ khai lệch tổng hoá đơn, đứt chuỗi đầu kỳ – cuối kỳ, hạn nộp sắp tới;
+- lưu tờ khai loại khác (môn bài, quyết toán, BCTC...) để tra cứu.
+
+Bấm **Kê khai** ở một quý để chuyển sang làm tờ khai quý đó.
+
+## Lưu trên mây (Firebase)
+
+Đăng nhập Google → hồ sơ (file gốc + số liệu) lưu vào Firebase project `app-from-ai`, database `khaithue`, bucket `khaithue`. Mỗi tài khoản chỉ thấy hồ sơ của mình (`firebase/*.rules`, kiểm bằng `npm run test:quyen`). Chưa đăng nhập thì chỉ lưu trên máy.
+
 ## Dùng hằng quý
 
 Mở trang web (Vercel), hoặc nhấp đúp `KeKhaiThue.html` để dùng không cần mạng.
@@ -39,6 +54,8 @@ npm install
 npm run dev        # chạy thử
 npm test           # chạy test; đối chiếu số liệu thật chỉ chạy khi có du-lieu-rieng/doi-chieu.json
 npm run kiem-xsd   # kiểm XML xuất ra theo XSD trong bộ cài HTKK (cần Python + lxml)
+npm run test:quyen # luật phân quyền + đồng bộ mây trên máy giả lập Firebase (cần Java + firebase-tools)
+npm run gia-lap    # bật máy giả lập; rồi `npm run dev:gia-lap` để chạy app nối vào đó
 npm run dong-goi   # build + chép thành KeKhaiThue.html (bản dùng không cần mạng)
 ```
 

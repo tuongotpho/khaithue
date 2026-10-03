@@ -99,3 +99,46 @@ describe.skipIf(!coDuLieu)('Đối chiếu với tờ khai 01/GTGT đã nộp', 
     expect(so.filter((d) => d.khop === false)).toEqual([])
   })
 })
+
+import { docTaiLieu } from './taiLieu'
+import { napHoaDon, napTaiLieu } from './kho'
+import { tinhTongQuan } from './tongQuan'
+
+interface CaTongQuan {
+  homNay: string
+  tuQuy: string
+  daNopBangPhaiNop: string[]
+  doanhThuKhopHoaDon: string[]
+  lechDoanhThu: Record<string, number>
+}
+const caTQ = (cfg as unknown as { tongQuan?: CaTongQuan } | null)?.tongQuan
+
+describe.skipIf(!coDuLieu || !caTQ)('Tổng quan dựng từ toàn bộ hồ sơ thật', () => {
+  it('đọc hết mọi file, phải nộp = đã nộp, doanh thu tờ khai = hoá đơn', () => {
+    const tim = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? tim(path.join(d, e.name)) : [path.join(d, e.name)])
+    const files = ['2024', '2025', '2026'].flatMap((n) => (fs.existsSync(path.join(cfg!.goc, n)) ? tim(path.join(cfg!.goc, n)) : []))
+    let kho = khoTrong()
+    const loi: string[] = []
+    for (const f of files.filter((x) => /\.xml$/i.test(x))) {
+      const r = napTaiLieu(kho, docTaiLieu(fs.readFileSync(f, 'utf8')), path.basename(f))
+      kho = r.kho
+      if (r.loi) loi.push(`${path.basename(f)}: ${r.moTa}`)
+    }
+    expect(loi).toEqual([]) // không file XML nào bị bỏ sót
+    const teps = files.filter((x) => /\.xlsx?$/i.test(x)).flatMap((f) => {
+      const wb = XLSX.readFile(f)
+      return wb.SheetNames.map((s) => docTep(XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[s], { header: 1, raw: true, defval: null }) as never, `${f}#${s}`)).filter((t): t is TepHoaDon => !!t)
+    })
+    const pl = phanLoai(teps, cfg!.mst)
+    kho = napHoaDon(kho, cfg!.mst, pl.hoaDon)
+
+    const tq = tinhTongQuan(kho, cfg!.mst, new Date(caTQ!.homNay))
+    expect(tq.tuQuy).toBe(caTQ!.tuQuy)
+    const q = new Map(tq.quy.map((x) => [x.khoa, x]))
+    for (const k of caTQ!.daNopBangPhaiNop) expect(q.get(k)!.daNop, k).toBe(q.get(k)!.phaiNop)
+    for (const k of caTQ!.doanhThuKhopHoaDon) expect(q.get(k)!.hieuLuc!.ct34, k).toBe(q.get(k)!.hoaDon!.ban.v)
+    for (const [k, lech] of Object.entries(caTQ!.lechDoanhThu)) expect((q.get(k)!.hieuLuc!.ct34 ?? 0) - q.get(k)!.hoaDon!.ban.v, k).toBe(lech)
+    expect(tq.quy.every((x) => x.khopDauKy !== false)).toBe(true)
+  })
+})

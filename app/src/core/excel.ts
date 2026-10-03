@@ -219,7 +219,8 @@ export function conHieuLuc(h: HoaDon): boolean {
   return !(t.includes('bị thay thế') || t.includes('xóa bỏ') || t.includes('hủy bỏ') || t.includes('xoá bỏ') || t.includes('huỷ bỏ'))
 }
 
-const khoa = (h: HoaDon) => `${h.loai}|${h.mstBan}|${h.kyHieuMau}|${h.kyHieu}|${Number(h.so) || h.so}`
+// Hoá đơn bán ra: không ghép MST người bán vào khoá (có file bỏ trống MST của chính mình) — xem kho.ts
+const khoa = (h: HoaDon) => `${h.loai}|${h.loai === 'ban' ? '' : h.mstBan}|${h.kyHieu}|${Number(h.so) || h.so}`
 
 export interface GopHoaDon {
   ban: HoaDon[]
