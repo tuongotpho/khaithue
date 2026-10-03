@@ -102,7 +102,7 @@ describe.skipIf(!coDuLieu)('Đối chiếu với tờ khai 01/GTGT đã nộp', 
 
 import { docTaiLieu } from './taiLieu'
 import { napHoaDon, napTaiLieu } from './kho'
-import { tinhTongQuan } from './tongQuan'
+import { tinhDoiTac, tinhTongQuan } from './tongQuan'
 
 interface CaTongQuan {
   homNay: string
@@ -140,5 +140,17 @@ describe.skipIf(!coDuLieu || !caTQ)('Tổng quan dựng từ toàn bộ hồ sơ
     for (const k of caTQ!.doanhThuKhopHoaDon) expect(q.get(k)!.hieuLuc!.ct34, k).toBe(q.get(k)!.hoaDon!.ban.v)
     for (const [k, lech] of Object.entries(caTQ!.lechDoanhThu)) expect((q.get(k)!.hieuLuc!.ct34 ?? 0) - q.get(k)!.hoaDon!.ban.v, k).toBe(lech)
     expect(tq.quy.every((x) => x.khopDauKy !== false)).toBe(true)
+
+    // Đối tác: tổng theo khách hàng / nhà cung cấp mỗi năm = tổng hoá đơn các quý của năm đó
+    for (const n of tq.nam) {
+      const dt = tinhDoiTac(kho, cfg!.mst, n.nam)
+      const quyNam = tq.quy.filter((x) => x.ky.nam === n.nam && x.hoaDon)
+      expect(dt.tongBan, `bán ra ${n.nam}`).toBe(quyNam.reduce((s, x) => s + x.hoaDon!.ban.v, 0))
+      expect(dt.tongMua, `mua vào ${n.nam}`).toBe(quyNam.reduce((s, x) => s + x.hoaDon!.mua.v, 0))
+      expect(dt.ban.reduce((s, d) => s + d.n, 0), `số HĐ bán ${n.nam}`).toBe(quyNam.reduce((s, x) => s + x.hoaDon!.ban.n, 0))
+    }
+    const tatCa = tinhDoiTac(kho, cfg!.mst, null)
+    console.log('Khách hàng (tất cả năm):', tatCa.ban.map((d) => `${d.ten.slice(0, 40)} | ${d.mst || '-'} | ${d.n} HĐ | ${(d.tyTrong * 100).toFixed(1)}%`))
+    console.log('Nhà cung cấp lớn nhất:', tatCa.mua.slice(0, 5).map((d) => `${d.ten.slice(0, 40)} | ${d.n} HĐ | ${(d.tyTrong * 100).toFixed(1)}%`), 'tổng NCC:', tatCa.mua.length)
   })
 })

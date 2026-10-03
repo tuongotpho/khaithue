@@ -1,8 +1,8 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { tenKy } from '../core/kho'
 import { tien } from '../core/nhan'
 import { tenTieuMuc } from '../core/taiLieu'
-import type { DongQuy, TongQuan as TQ } from '../core/tongQuan'
+import type { DoiTac, DongDoiTac, DongQuy, TongQuan as TQ } from '../core/tongQuan'
 import { DanhSachCanhBao } from './chung'
 
 const trieu = (n: number) => (Math.abs(n) >= 1e9 ? `${(n / 1e9).toLocaleString('vi-VN', { maximumFractionDigits: 2 })} tỷ` : `${Math.round(n / 1e6).toLocaleString('vi-VN')} tr`)
@@ -137,19 +137,160 @@ function OTrangThai({ q }: { q: DongQuy }) {
   return <span className="text-emerald-700">✅ {q.coBoSung ? 'có bổ sung' : 'lần đầu'}</span>
 }
 
-export function TongQuanDN({ tq, tenCty, onMoQuy }: { tq: TQ; tenCty: string; onMoQuy: (khoa: string) => void }) {
+// ---------- Khung thu gọn / mở rộng (nhớ trạng thái trên máy này) ----------
+
+const KHOA_THU_GON = 'tq:thuGon'
+function docThuGon(): Record<string, boolean> {
+  try {
+    return JSON.parse(localStorage.getItem(KHOA_THU_GON) ?? '{}')
+  } catch {
+    return {}
+  }
+}
+
+function PhanThuGon({ id, tieuDe, phu, dong, setDong, children }: {
+  id: string
+  tieuDe: ReactNode
+  phu?: ReactNode
+  dong: Record<string, boolean>
+  setDong: (d: Record<string, boolean>) => void
+  children: ReactNode
+}) {
+  const mo = !dong[id]
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2">
+        <button className="flex items-center gap-2 text-left hover:text-emerald-800" aria-expanded={mo} onClick={() => setDong({ ...dong, [id]: mo })}>
+          <span className="w-4 text-slate-500">{mo ? '▾' : '▸'}</span>
+          <span className="font-semibold">{tieuDe}</span>
+        </button>
+        {phu && <span className="ml-auto text-sm text-slate-500">{phu}</span>}
+      </div>
+      {mo && <div className="border-t border-slate-100 p-3">{children}</div>}
+    </section>
+  )
+}
+
+// ---------- Bảng đối tác ----------
+
+function BangDoiTac({ ds, tong, loai }: { ds: DongDoiTac[]; tong: number; loai: 'ban' | 'mua' }) {
+  const [tatCa, setTatCa] = useState(false)
+  const [tim, setTim] = useState('')
+  if (!ds.length) return <p className="text-sm text-slate-500">Chưa có hoá đơn {loai === 'ban' ? 'bán ra' : 'mua vào'} trong khoảng này. Nạp file Excel “Danh sách hóa đơn” để xem.</p>
+  const loc = ds.filter((d) => !tim || d.ten.toLowerCase().includes(tim.toLowerCase()) || d.mst.includes(tim))
+  const hien = tatCa || tim ? loc : loc.slice(0, 10)
+  const lon = ds[0]
+  return (
+    <div>
+      {loai === 'ban' && ds.length === 1 && (
+        <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">⚠️ Toàn bộ doanh thu đến từ một khách hàng duy nhất.</p>
+      )}
+      {loai === 'ban' && ds.length > 1 && lon.tyTrong >= 0.5 && (
+        <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          ⚠️ Doanh thu phụ thuộc lớn vào một khách: <b>{lon.ten}</b> chiếm {(lon.tyTrong * 100).toFixed(0)}% doanh số bán ra.
+        </p>
+      )}
+      <input
+        className="mb-2 w-full max-w-xs rounded-lg border border-slate-300 px-2 py-1 text-sm"
+        placeholder="Tìm theo tên hoặc MST…"
+        value={tim}
+        onChange={(e) => setTim(e.target.value)}
+      />
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="text-left text-slate-500">
+            <tr>
+              <th className="p-1">{loai === 'ban' ? 'Khách hàng' : 'Nhà cung cấp'}</th>
+              <th className="p-1">MST</th>
+              <th className="p-1 text-right">Số HĐ</th>
+              <th className="p-1 text-right">Giá trị chưa thuế</th>
+              <th className="p-1 text-right">Thuế GTGT</th>
+              <th className="p-1">Tỷ trọng</th>
+              <th className="p-1">Gần nhất</th>
+              <th className="p-1 text-right">Số quý</th>
+            </tr>
+          </thead>
+          <tbody>
+            {hien.map((d) => (
+              <tr key={d.khoa} className="border-t border-slate-100">
+                <td className="p-1">{d.ten}</td>
+                <td className="p-1 tabular-nums text-slate-500">{d.mst || '—'}</td>
+                <td className="p-1 text-right tabular-nums">{d.n}</td>
+                <td className="p-1 text-right tabular-nums">{tien(d.v)}</td>
+                <td className="p-1 text-right tabular-nums">{tien(d.t)}</td>
+                <td className="p-1">
+                  <div className="flex items-center gap-2" title={`${(d.tyTrong * 100).toFixed(1)}%`}>
+                    <div className="h-2 w-24 rounded-full bg-slate-100">
+                      <div className="h-2 rounded-full" style={{ width: `${Math.max(d.tyTrong * 100, 1)}%`, background: loai === 'ban' ? 'var(--series-1)' : 'var(--series-2)' }} />
+                    </div>
+                    <span className="tabular-nums text-slate-600">{(d.tyTrong * 100).toFixed(1)}%</span>
+                  </div>
+                </td>
+                <td className="whitespace-nowrap p-1 text-slate-600">{d.cuoi}</td>
+                <td className="p-1 text-right tabular-nums">{d.soQuy}</td>
+              </tr>
+            ))}
+            <tr className="border-t border-slate-200 font-semibold">
+              <td className="p-1" colSpan={3}>Cộng ({ds.length} đối tác)</td>
+              <td className="p-1 text-right tabular-nums">{tien(tong)}</td>
+              <td className="p-1 text-right tabular-nums">{tien(ds.reduce((s, d) => s + d.t, 0))}</td>
+              <td colSpan={3} />
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      {!tim && loc.length > 10 && (
+        <button className="mt-1 text-sm text-emerald-700 underline" onClick={() => setTatCa(!tatCa)}>
+          {tatCa ? 'Chỉ xem 10 đối tác lớn nhất' : `Xem tất cả ${loc.length} đối tác`}
+        </button>
+      )}
+    </div>
+  )
+}
+
+const CAC_PHAN = ['soLieu', 'bieuDo', 'canXuLy', 'theoQuy', 'khachHang', 'nhaCungCap', 'chungTu', 'khac']
+
+export function TongQuanDN({ tq, tenCty, onMoQuy, layDoiTac }: {
+  tq: TQ
+  tenCty: string
+  onMoQuy: (khoa: string) => void
+  layDoiTac: (nam: number | null) => DoiTac
+}) {
   const cacNam = tq.nam.map((n) => n.nam)
   const [nam, setNam] = useState<number | null>(null)
+  const [namDT, setNamDT] = useState<number | 'tatCa' | null>(null)
+  const [dong, setDongState] = useState<Record<string, boolean>>(docThuGon)
+  const setDong = (d: Record<string, boolean>) => {
+    setDongState(d)
+    try {
+      localStorage.setItem(KHOA_THU_GON, JSON.stringify(d))
+    } catch {
+      /* bỏ qua */
+    }
+  }
   // Mặc định: năm gần nhất có tờ khai
   const namMacDinh = tq.nam.find((x) => x.soQuyCoToKhai > 0)?.nam ?? cacNam[0]
   const n = tq.nam.find((x) => x.nam === (nam ?? namMacDinh))
+  // Đối tác: mặc định theo năm đang xem ở trên; chọn được "tất cả các năm"
+  const namDoiTac = namDT === 'tatCa' ? null : (namDT ?? n?.nam ?? null)
+  const dt = useMemo(() => layDoiTac(namDoiTac), [layDoiTac, namDoiTac])
   const loi = useMemo(() => tq.canhBao.filter((c) => c.muc === 'loi').length, [tq])
 
   if (!tq.quy.length) return <p className="text-slate-500">Chưa có hồ sơ nào của {tenCty}. Nạp các file tờ khai, chứng từ, hoá đơn ở ô trên.</p>
 
+  const chonNamDT = (
+    <select
+      className="rounded-lg border border-slate-300 px-2 py-0.5 text-sm"
+      value={namDoiTac === null ? 'tatCa' : String(namDoiTac)}
+      onChange={(e) => setNamDT(e.target.value === 'tatCa' ? 'tatCa' : Number(e.target.value))}
+    >
+      <option value="tatCa">Tất cả các năm</option>
+      {cacNam.map((x) => <option key={x} value={x}>Năm {x}</option>)}
+    </select>
+  )
+
   return (
-    <div className="space-y-5">
-      {/* Hạn nộp + năm */}
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
         {tq.hanToi && (
           <span className={`rounded-full px-3 py-1 ${tq.hanToi.daCoToKhai ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900'}`}>
@@ -158,35 +299,39 @@ export function TongQuanDN({ tq, tenCty, onMoQuy }: { tq: TQ; tenCty: string; on
           </span>
         )}
         <span className="text-sm text-slate-500">Hồ sơ từ quý {tq.tuQuy ? tenKy(tq.tuQuy) : '—'}</span>
-        <label className="ml-auto text-sm">
-          Năm{' '}
-          <select className="rounded-lg border border-slate-300 px-2 py-1" value={n?.nam} onChange={(e) => setNam(Number(e.target.value))}>
-            {cacNam.map((x) => <option key={x} value={x}>{x}</option>)}
-          </select>
-        </label>
+        <div className="ml-auto flex flex-wrap items-center gap-3 text-sm">
+          <button className="text-emerald-700 underline" onClick={() => setDong({})}>Mở hết</button>
+          <button className="text-emerald-700 underline" onClick={() => setDong(Object.fromEntries(CAC_PHAN.map((k) => [k, true])))}>Thu gọn hết</button>
+          <label>
+            Năm{' '}
+            <select className="rounded-lg border border-slate-300 px-2 py-1" value={n?.nam} onChange={(e) => setNam(Number(e.target.value))}>
+              {cacNam.map((x) => <option key={x} value={x}>{x}</option>)}
+            </select>
+          </label>
+        </div>
       </div>
 
       {n && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <The nhan={`Doanh thu ${n.nam}`} giaTri={trieu(n.doanhThu)} phu={`${tien(n.doanhThu)} đ`} />
-          <The nhan={`Mua vào ${n.nam}`} giaTri={trieu(n.muaVao)} phu={`${tien(n.muaVao)} đ`} />
-          <The nhan="Thuế GTGT phải nộp" giaTri={`${tien(n.phaiNop)} đ`} phu={`${n.soQuyCoToKhai}/4 quý đã có tờ khai`} />
-          <The nhan="Đã nộp (theo chứng từ)" giaTri={`${tien(n.daNop)} đ`} phu={n.daNop >= n.phaiNop ? 'đủ' : `chênh ${tien(n.phaiNop - n.daNop)} đ`} />
-        </div>
+        <PhanThuGon id="soLieu" tieuDe={`Số liệu năm ${n.nam}`} dong={dong} setDong={setDong}>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <The nhan={`Doanh thu ${n.nam}`} giaTri={trieu(n.doanhThu)} phu={`${tien(n.doanhThu)} đ`} />
+            <The nhan={`Mua vào ${n.nam}`} giaTri={trieu(n.muaVao)} phu={`${tien(n.muaVao)} đ`} />
+            <The nhan="Thuế GTGT phải nộp" giaTri={`${tien(n.phaiNop)} đ`} phu={`${n.soQuyCoToKhai}/4 quý đã có tờ khai`} />
+            <The nhan="Đã nộp (theo chứng từ)" giaTri={`${tien(n.daNop)} đ`} phu={n.daNop >= n.phaiNop ? 'đủ' : `chênh ${tien(n.phaiNop - n.daNop)} đ`} />
+          </div>
+        </PhanThuGon>
       )}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-3">
+      <PhanThuGon id="bieuDo" tieuDe="Biểu đồ doanh thu và mua vào theo quý" dong={dong} setDong={setDong}>
         <BieuDoQuy quy={tq.quy} />
-      </div>
+      </PhanThuGon>
 
-      <div>
-        <h3 className="font-semibold">Cần xử lý {loi > 0 && <span className="text-red-700">({loi} lỗi)</span>}</h3>
+      <PhanThuGon id="canXuLy" tieuDe={<>Cần xử lý {loi > 0 && <span className="text-red-700">({loi} lỗi)</span>}</>} phu={`${tq.canhBao.length} mục`} dong={dong} setDong={setDong}>
         {tq.canhBao.length ? <DanhSachCanhBao ds={tq.canhBao} /> : <p className="text-emerald-700">✅ Không có gì cần xử lý.</p>}
-      </div>
+      </PhanThuGon>
 
-      <div>
-        <h3 className="mb-1 font-semibold">Theo dõi từng quý</h3>
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <PhanThuGon id="theoQuy" tieuDe="Theo dõi từng quý" phu={`${tq.quy.length} quý`} dong={dong} setDong={setDong}>
+        <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-slate-500">
               <tr>
@@ -228,11 +373,30 @@ export function TongQuanDN({ tq, tenCty, onMoQuy }: { tq: TQ; tenCty: string; on
           </table>
         </div>
         <p className="mt-1 text-xs text-slate-500">Số liệu lấy theo bản tờ khai đang có hiệu lực (bổ sung mới nhất, không có thì bản lần đầu). Bản bị cơ quan thuế trả về không tính.</p>
-      </div>
+      </PhanThuGon>
+
+      <PhanThuGon
+        id="khachHang"
+        tieuDe="👥 Khách hàng (bán ra)"
+        phu={<span className="flex items-center gap-2">{dt.ban.length} khách · {trieu(dt.tongBan)} {chonNamDT}</span>}
+        dong={dong}
+        setDong={setDong}
+      >
+        <BangDoiTac ds={dt.ban} tong={dt.tongBan} loai="ban" />
+      </PhanThuGon>
+
+      <PhanThuGon
+        id="nhaCungCap"
+        tieuDe="🏭 Nhà cung cấp (mua vào)"
+        phu={<span className="flex items-center gap-2">{dt.mua.length} nhà cung cấp · {trieu(dt.tongMua)} {chonNamDT}</span>}
+        dong={dong}
+        setDong={setDong}
+      >
+        <BangDoiTac ds={dt.mua} tong={dt.tongMua} loai="mua" />
+      </PhanThuGon>
 
       {tq.chungTu.length > 0 && (
-        <div>
-          <h3 className="mb-1 font-semibold">Chứng từ nộp tiền vào ngân sách ({tq.chungTu.length})</h3>
+        <PhanThuGon id="chungTu" tieuDe="Chứng từ nộp tiền vào ngân sách" phu={`${tq.chungTu.length} chứng từ`} dong={dong} setDong={setDong}>
           <ul className="space-y-1 text-sm">
             {tq.chungTu.map((c) => (
               <li key={c.so}>
@@ -240,18 +404,17 @@ export function TongQuanDN({ tq, tenCty, onMoQuy }: { tq: TQ; tenCty: string; on
               </li>
             ))}
           </ul>
-        </div>
+        </PhanThuGon>
       )}
 
       {tq.khac.length > 0 && (
-        <div>
-          <h3 className="mb-1 font-semibold">Tờ khai / báo cáo khác đã lưu ({tq.khac.length})</h3>
+        <PhanThuGon id="khac" tieuDe="Tờ khai / báo cáo khác đã lưu" phu={`${tq.khac.length} tờ`} dong={dong} setDong={setDong}>
           <ul className="space-y-1 text-sm">
             {tq.khac.map((t, i) => (
               <li key={i}>{t.tenTKhai || `Mẫu mã ${t.maTKhai}`} — kỳ {t.ky}{t.loaiTKhai === 'B' ? ` (bổ sung ${t.soLan})` : ''} <span className="text-slate-400">({t.tenFile})</span></li>
             ))}
           </ul>
-        </div>
+        </PhanThuGon>
       )}
     </div>
   )

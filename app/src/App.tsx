@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { conHieuLuc, docTep, gopHoaDon, kiemSoHoaDonBan, phanLoai, type TepHoaDon } from './core/excel'
 import { kiemDauKy, tinhGTGT, NHAP_TAY_TRONG, type NhapTayGTGT, type SuaPhuLucMua } from './core/gtgt'
@@ -8,7 +8,7 @@ import { tenFileXML, xmlGTGT, xmlTNCN } from './core/xml'
 import { denNgay, hanNop, ngayISO, quyCanKhai, tuNgay } from './core/ky'
 import { dauKy, datKhongChapNhan, ghiAppXuat, gopTuMay, kyTruoc, napHoaDon, napTaiLieu, napToKhai, rutGonHoaDon, suaHoSo, tncnGanNhat, type Kho } from './core/kho'
 import { docTaiLieu } from './core/taiLieu'
-import { tinhTongQuan } from './core/tongQuan'
+import { tinhDoiTac, tinhTongQuan } from './core/tongQuan'
 import { NapHangLoat, TongQuanDN } from './ui/TongQuan'
 import type { ToKhaiDaNop } from './core/docToKhai'
 import { coMay } from './may/firebase'
@@ -422,6 +422,7 @@ export default function App() {
   )
   const tncn = tinhTNCN(nhapTNCN)
   const tq = useMemo(() => (mst ? tinhTongQuan(kho, mst) : null), [kho, mst])
+  const layDoiTac = useCallback((nam: number | null) => tinhDoiTac(kho, mst ?? '', nam), [kho, mst])
   const ct = gtgt.toKhai.ct
 
   const canhBaoHoSo: CanhBao[] = hoSo && THIEU_CQT(hoSo)
@@ -509,7 +510,7 @@ export default function App() {
             <NapHangLoat onFiles={(f) => void napHangLoat(f)} tienDo={tienDo} />
             {ketQuaNap && <p className="text-sm text-emerald-800">{ketQuaNap}</p>}
             {!user && coMay && <p className="text-sm text-slate-500">Mẹo: đăng nhập Google (trên cùng) trước khi nạp để hồ sơ được lưu lên mây, mở ở máy khác cũng thấy.</p>}
-            {tq && hoSo ? <TongQuanDN tq={tq} tenCty={hoSo.tenNNT} onMoQuy={moQuyKeKhai} /> : <p className="text-slate-500">Nạp hồ sơ để xem tổng quan.</p>}
+            {tq && hoSo ? <TongQuanDN tq={tq} tenCty={hoSo.tenNNT} onMoQuy={moQuyKeKhai} layDoiTac={layDoiTac} /> : <p className="text-slate-500">Nạp hồ sơ để xem tổng quan.</p>}
           </section>
         )}
 

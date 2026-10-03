@@ -94,3 +94,37 @@ describe('Tổng quan doanh nghiệp', () => {
     expect(q.hoaDon?.ban.n).toBe(1)
   })
 })
+
+import { tinhDoiTac } from './tongQuan'
+
+describe('Đối tác', () => {
+  const h = (loai: 'ban' | 'mua', so: string, ngay: string, ten: string, mstDT: string, v: number, trangThai = 'Hóa đơn mới'): HoaDon => ({
+    loai, kyHieuMau: '1', kyHieu: loai === 'ban' ? 'C25TAA' : 'C25TXX', so, ngay,
+    mstBan: loai === 'ban' ? MST : mstDT, tenBan: loai === 'ban' ? 'Cty' : ten,
+    mstMua: loai === 'ban' ? mstDT : MST, tenMua: loai === 'ban' ? ten : 'Cty',
+    chuaThue: v, thue: v * 0.08, trangThai, file: '',
+  })
+  const kho = napHoaDon(khoTrong(), MST, [
+    h('ban', '1', '10/01/2025', 'CÔNG TY A', '0300000001', 600),
+    h('ban', '2', '10/05/2025', 'Công ty A', '', 200), // thiếu MST, khác hoa/thường -> vẫn gom vào A
+    h('ban', '3', '10/08/2025', 'Công ty B', '0300000002', 200),
+    h('ban', '4', '10/09/2025', 'Công ty B', '0300000002', 999, 'Hóa đơn đã bị thay thế'), // không tính
+    h('ban', '5', '10/02/2024', 'Công ty B', '0300000002', 100), // năm khác
+    h('mua', '7', '05/03/2025', 'NCC X', '0200000001', 500),
+  ])
+
+  it('gom theo đối tác, bỏ hoá đơn bị thay thế, tỷ trọng, số quý, ngày gần nhất', () => {
+    const d = tinhDoiTac(kho, MST, 2025)
+    expect(d.tongBan).toBe(1000)
+    expect(d.ban.map((x) => [x.mst, x.n, x.v, x.tyTrong, x.soQuy, x.dau, x.cuoi])).toEqual([
+      ['0300000001', 2, 800, 0.8, 2, '10/01/2025', '10/05/2025'],
+      ['0300000002', 1, 200, 0.2, 1, '10/08/2025', '10/08/2025'],
+    ])
+    expect(d.mua).toMatchObject([{ mst: '0200000001', n: 1, v: 500, tyTrong: 1 }])
+  })
+
+  it('tất cả các năm', () => {
+    const d = tinhDoiTac(kho, MST, null)
+    expect(d.ban.find((x) => x.mst === '0300000002')).toMatchObject({ n: 2, v: 300, soQuy: 2 })
+  })
+})

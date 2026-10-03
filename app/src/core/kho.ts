@@ -56,6 +56,7 @@ export interface ToKhaiKhac {
 export interface HoaDonGon {
   l: 'ban' | 'mua'
   mb: string // MST người bán (để nhận dạng hoá đơn mua vào)
+  mm?: string // MST người mua (để gom khách hàng; dữ liệu cũ có thể thiếu)
   kh: string
   so: string
   ng: string // dd/MM/yyyy
@@ -310,7 +311,7 @@ export function napHoaDon(kho0: Kho, mst: string, ds: HoaDon[]): Kho {
     const k = khoaGon(h)
     const cu = nhom[k]
     if (cu && conHieuLuc({ trangThai: cu.tt } as HoaDon) === false && conHieuLuc(h)) continue
-    nhom[k] = { l: h.loai, mb: h.mstBan, kh: h.kyHieu, so: h.so, ng: h.ngay, ten: h.loai === 'ban' ? h.tenMua : h.tenBan, v: h.chuaThue, t: h.thue, tt: h.trangThai }
+    nhom[k] = { l: h.loai, mb: h.mstBan, mm: h.mstMua, kh: h.kyHieu, so: h.so, ng: h.ngay, ten: h.loai === 'ban' ? h.tenMua : h.tenBan, v: h.chuaThue, t: h.thue, tt: h.trangThai }
   }
   return kho
 }
@@ -355,12 +356,12 @@ export function moRongHoaDon(g: HoaDonGon, mst: string): HoaDon {
   return {
     loai: g.l, kyHieuMau: '', kyHieu: g.kh, so: g.so, ngay: g.ng,
     mstBan: g.l === 'ban' ? mst : g.mb, tenBan: g.l === 'ban' ? '' : g.ten,
-    mstMua: g.l === 'mua' ? mst : '', tenMua: g.l === 'ban' ? g.ten : '',
+    mstMua: g.l === 'mua' ? mst : g.mm ?? '', tenMua: g.l === 'ban' ? g.ten : '',
     chuaThue: g.v, thue: g.t, trangThai: g.tt, file: '',
   }
 }
 
 /** Rút gọn danh sách hoá đơn để lưu lên mây cùng file Excel */
 export function rutGonHoaDon(ds: HoaDon[]): HoaDonGon[] {
-  return ds.map((h) => ({ l: h.loai, mb: h.mstBan, kh: h.kyHieu, so: h.so, ng: h.ngay, ten: h.loai === 'ban' ? h.tenMua : h.tenBan, v: h.chuaThue, t: h.thue, tt: h.trangThai }))
+  return ds.map((h) => ({ l: h.loai, mb: h.mstBan, mm: h.mstMua, kh: h.kyHieu, so: h.so, ng: h.ngay, ten: h.loai === 'ban' ? h.tenMua : h.tenBan, v: h.chuaThue, t: h.thue, tt: h.trangThai }))
 }

@@ -185,3 +185,71 @@ export function tinhTongQuan(kho: Kho, mst: string, homNay = new Date()): TongQu
     hanToi,
   }
 }
+
+// ---------------- ĐỐI TÁC: khách hàng (bán ra) và nhà cung cấp (mua vào) ----------------
+
+export interface DongDoiTac {
+  khoa: string
+  ten: string
+  mst: string
+  n: number // số hoá đơn
+  v: number // giá trị chưa thuế
+  t: number // thuế
+  tyTrong: number // 0..1 trên tổng cùng chiều
+  dau: string // ngày giao dịch đầu (dd/MM/yyyy)
+  cuoi: string // ngày giao dịch gần nhất
+  soQuy: number // số quý có giao dịch
+}
+
+export interface DoiTac {
+  ban: DongDoiTac[]
+  mua: DongDoiTac[]
+  tongBan: number
+  tongMua: number
+}
+
+const chuanTen = (s: string) => s.normalize('NFC').toUpperCase().replace(/\s+/g, ' ').trim()
+const soNgay = (s: string) => {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s)
+  return m ? Number(m[3]) * 10000 + Number(m[2]) * 100 + Number(m[1]) : 0
+}
+
+/** Gom hoá đơn còn hiệu lực theo đối tác. `nam` = null: tất cả các năm */
+export function tinhDoiTac(kho: Kho, mst: string, nam: number | null): DoiTac {
+  const ds = Object.values(kho.hoaDon?.[mst] ?? {}).filter((h) => {
+    const t = h.tt.toLowerCase()
+    if (t.includes('bị thay thế') || t.includes('xóa bỏ') || t.includes('hủy bỏ') || t.includes('xoá bỏ') || t.includes('huỷ bỏ')) return false
+    return nam === null || h.ng.endsWith(`/${nam}`)
+  })
+  // Tên -> MST (từ những hoá đơn có MST đối tác) để gom cùng một đối tác dù có hoá đơn thiếu MST
+  const mstTheoTen = new Map<string, string>()
+  for (const h of ds) {
+    const m = h.l === 'ban' ? h.mm : h.mb
+    if (m) mstTheoTen.set(chuanTen(h.ten), m)
+  }
+  const gom = (l: 'ban' | 'mua') => {
+    const nhom = new Map<string, DongDoiTac & { quy: Set<string> }>()
+    for (const h of ds.filter((x) => x.l === l)) {
+      const m = (l === 'ban' ? h.mm : h.mb) || mstTheoTen.get(chuanTen(h.ten)) || ''
+      const khoa = m || chuanTen(h.ten)
+      const g = nhom.get(khoa) ?? { khoa, ten: h.ten, mst: m, n: 0, v: 0, t: 0, tyTrong: 0, dau: h.ng, cuoi: h.ng, soQuy: 0, quy: new Set<string>() }
+      g.n++
+      g.v += h.v
+      g.t += h.t
+      if (soNgay(h.ng) < soNgay(g.dau)) g.dau = h.ng
+      if (soNgay(h.ng) > soNgay(g.cuoi)) {
+        g.cuoi = h.ng
+        g.ten = h.ten // lấy tên trên hoá đơn mới nhất
+      }
+      const q = quyCuaNgay(h.ng)
+      if (q) g.quy.add(q)
+      nhom.set(khoa, g)
+    }
+    const tong = [...nhom.values()].reduce((s, g) => s + g.v, 0)
+    const kq = [...nhom.values()].map(({ quy, ...g }) => ({ ...g, soQuy: quy.size, tyTrong: tong ? g.v / tong : 0 })).sort((a, b) => b.v - a.v)
+    return { kq, tong }
+  }
+  const b = gom('ban')
+  const m = gom('mua')
+  return { ban: b.kq, mua: m.kq, tongBan: b.tong, tongMua: m.tong }
+}
