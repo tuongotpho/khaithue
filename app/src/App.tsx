@@ -78,7 +78,7 @@ export default function App() {
   /** File Excel lưu bằng bản cũ chưa có danh sách hoá đơn rút gọn: tải về, đọc lại, bổ sung (chạy 1 lần) */
   const dangBoSung = useRef(false)
   async function boSungFileCu(uid: string, du: DuLieuMay) {
-    const thieu = Object.entries(du.tepHoaDon).flatMap(([mst, ds]) => ds.filter((d) => !d.hd && /\.(xlsx|xls|csv)$/i.test(d.ten)).map((d) => ({ mst, d })))
+    const thieu = Object.entries(du.tepHoaDon).flatMap(([mst, ds]) => ds.filter((d) => !d.hd?.length && d.soBan + d.soMua > 0 && /\.(xlsx|xls|csv)$/i.test(d.ten)).map((d) => ({ mst, d })))
     if (!thieu.length || dangBoSung.current) return
     dangBoSung.current = true
     let xong = 0
