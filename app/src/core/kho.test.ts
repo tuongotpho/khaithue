@@ -80,3 +80,22 @@ describe('Sổ theo dõi tờ khai', () => {
     expect(tncnGanNhat(kho, HS.mst, { quy: 1, nam: 2026 })?.ct16).toBe(3)
   })
 })
+
+import { gopTuMay } from './kho'
+
+describe('Gộp dữ liệu từ mây', () => {
+  it('dựng lại sổ từ các bản ghi trên mây, giữ cờ "CQT trả về", nhớ mã bản ghi', () => {
+    const congTy = [{ hoSo: { ...HS, nguoiKy: 'Người sửa tay' }, kyNguon: '2026-Q1', suaTay: true }]
+    const kho = gopTuMay(khoTrong(), congTy, [
+      { id: 'a', mst: HS.mst, maTKhai: '842', ky: '2026-Q1', loaiTKhai: 'C', soLan: 0, ngayLap: '', ct: { ct43: 500 }, tenFile: 'a.xml', khongChapNhan: true },
+      { id: 'b', mst: HS.mst, maTKhai: '842', ky: '2026-Q1', loaiTKhai: 'C', soLan: 0, ngayLap: '', ct: { ct43: 0 }, tenFile: 'b.xml' },
+      { id: 'c', mst: HS.mst, maTKhai: '842', ky: '2026-Q1', loaiTKhai: 'C', soLan: 0, ngayLap: '', ct: { ct43: 0 }, tenFile: 'b-da-ky.xml' },
+    ])
+    expect(kho.congTy[HS.mst].hoSo.nguoiKy).toBe('Người sửa tay')
+    expect(dauKy(kho, HS.mst, { quy: 2, nam: 2026 }).ct22).toBe(0)
+    const ds = kho.gtgt[HS.mst]['2026-Q1']
+    expect(ds).toHaveLength(2)
+    expect(ds.find((x) => x.ct43 === 500)?.khongChapNhan).toBe(true)
+    expect(ds.find((x) => x.ct43 === 0)?.ids?.sort()).toEqual(['b', 'c'])
+  })
+})

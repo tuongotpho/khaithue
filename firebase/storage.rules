@@ -1,0 +1,13 @@
+rules_version = '2';
+// Bucket "khaithue" (riêng của app kê khai thuế).
+// File tờ khai XML / Excel hoá đơn của ai nằm trong nguoiDung/{uid}/... của người đó.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /nguoiDung/{uid}/{allPaths=**} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      // Ghi: đúng chủ, file dưới 10 MB
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.size < 10 * 1024 * 1024;
+    }
+  }
+}

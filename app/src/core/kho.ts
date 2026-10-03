@@ -23,6 +23,8 @@ export interface PhienBanGTGT {
   tenFile: string
   /** Người dùng đánh dấu: cơ quan thuế KHÔNG chấp nhận bản này -> không dùng */
   khongChapNhan?: boolean
+  /** Mã các bản ghi trên mây (Firestore) ứng với phiên bản này — có thể nhiều bản trùng số liệu */
+  ids?: string[]
 }
 
 export interface CongTyLuu {
@@ -71,7 +73,7 @@ export interface KetQuaNap {
 }
 
 /** Nạp một tờ khai XML đã đọc vào sổ */
-export function napToKhai(kho0: Kho, tk: ToKhaiDaNop, tenFile: string): KetQuaNap {
+export function napToKhai(kho0: Kho, tk: ToKhaiDaNop, tenFile: string, id?: string): KetQuaNap {
   const mst = tk.hoSo.mst
   if (!mst || !tk.ky) return { kho: kho0, moTa: 'Không đọc được MST hoặc kỳ kê khai', loi: true }
   if (tk.maTKhai !== '842' && tk.maTKhai !== '864') {
@@ -98,12 +100,14 @@ export function napToKhai(kho0: Kho, tk: ToKhaiDaNop, tenFile: string): KetQuaNa
     ct43: tk.ct.ct43 ?? 0,
     nguon: 'xml',
     tenFile,
+    ids: id ? [id] : [],
   }
   const ds = ((kho.gtgt[mst] ??= {})[khoa] ??= [])
   // Bỏ bản do app tự ghi khi xuất (giờ đã có bản thật); bỏ bản trùng (cùng loại, lần, số liệu: vd bản chưa ký và bản đã ký)
   const giu = ds.filter((x) => x.nguon !== 'app' && !(x.loaiTKhai === pb.loaiTKhai && x.soLan === pb.soLan && x.ct22 === pb.ct22 && x.ct43 === pb.ct43 && x.ct40 === pb.ct40))
   const cu = ds.find((x) => x.nguon !== 'app' && x.loaiTKhai === pb.loaiTKhai && x.soLan === pb.soLan && x.ct43 === pb.ct43 && x.ct40 === pb.ct40)
   if (cu?.khongChapNhan) pb.khongChapNhan = true
+  if (cu?.ids) pb.ids = [...new Set([...cu.ids, ...(pb.ids ?? [])])]
   kho.gtgt[mst][khoa] = [...giu, pb]
   const loai = pb.loaiTKhai === 'B' ? `bổ sung lần ${pb.soLan}` : 'lần đầu'
   return { kho, moTa: `01/GTGT quý ${tenKy(khoa)} (${loai}): [22] = ${pb.ct22.toLocaleString('vi-VN')}, [40] = ${pb.ct40.toLocaleString('vi-VN')}, [43] = ${pb.ct43.toLocaleString('vi-VN')}` }
@@ -198,4 +202,43 @@ export function tncnGanNhat(kho: Kho, mst: string, ky: KyKeKhai): Record<string,
   const theoKy = kho.tncn[mst] ?? {}
   const k = Object.keys(theoKy).filter((x) => x < khoaKy(ky)).sort().pop()
   return k ? theoKy[k] : null
+}
+
+/** Một tờ khai đã lưu trên mây (Firestore), đủ để dựng lại sổ mà không cần tải file XML về */
+export interface ToKhaiMay {
+  id: string
+  mst: string
+  maTKhai: string
+  ky: string // yyyy-Qn
+  loaiTKhai: string
+  soLan: number
+  ngayLap: string
+  ct: Record<string, number>
+  tenFile: string
+  khongChapNhan?: boolean
+}
+
+/** Gộp dữ liệu trên mây vào sổ trên máy (hợp nhất, không xoá gì của máy) */
+export function gopTuMay(kho0: Kho, congTy: CongTyLuu[], toKhai: ToKhaiMay[]): Kho {
+  let kho = kho0
+  for (const t of toKhai) {
+    const m = /^(\d{4})-Q(\d)$/.exec(t.ky)
+    if (!m) continue
+    const hoSo = congTy.find((c) => c.hoSo.mst === t.mst)?.hoSo ?? kho.congTy[t.mst]?.hoSo
+    if (!hoSo) continue
+    kho = napToKhai(kho, {
+      maTKhai: t.maTKhai, loaiTKhai: t.loaiTKhai, soLan: t.soLan, ngayLap: t.ngayLap,
+      ky: { quy: Number(m[2]) as 1 | 2 | 3 | 4, nam: Number(m[1]) }, hoSo, ct: t.ct, plMua: [], plBan: [], ct9: null,
+    }, t.tenFile, t.id).kho
+    if (t.khongChapNhan) {
+      const ds = kho.gtgt[t.mst]?.[t.ky] ?? []
+      const i = ds.findIndex((x) => x.ids?.includes(t.id))
+      if (i >= 0) kho = datKhongChapNhan(kho, t.mst, t.ky, i, true)
+    }
+  }
+  kho = structuredClone(kho)
+  // Thông tin công ty trên mây là bản người dùng đã chốt -> ưu tiên
+  for (const c of congTy) kho.congTy[c.hoSo.mst] = structuredClone(c)
+  if (!kho.chon && congTy[0]) kho.chon = congTy[0].hoSo.mst
+  return kho
 }

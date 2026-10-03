@@ -1,0 +1,10 @@
+rules_version = '2';
+// Database "khaithue" (riêng của app kê khai thuế, không dùng chung app khác).
+// Mỗi tài khoản Google chỉ đọc/ghi được vùng nguoiDung/{uid của chính mình}. Mọi thứ khác: cấm.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /nguoiDung/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}

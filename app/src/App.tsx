@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { conHieuLuc, docTep, gopHoaDon, kiemSoHoaDonBan, phanLoai, type TepHoaDon } from './core/excel'
 import { kiemDauKy, tinhGTGT, NHAP_TAY_TRONG, type NhapTayGTGT, type SuaPhuLucMua } from './core/gtgt'
@@ -6,10 +6,15 @@ import { tinhTNCN, NHAP_TNCN_TRONG, type NhapTNCN } from './core/tncn'
 import { docToKhai } from './core/docToKhai'
 import { tenFileXML, xmlGTGT, xmlTNCN } from './core/xml'
 import { denNgay, hanNop, ngayISO, quyCanKhai, tuNgay } from './core/ky'
-import { dauKy, datKhongChapNhan, ghiAppXuat, kyTruoc, napToKhai, suaHoSo, tncnGanNhat, type Kho } from './core/kho'
+import { dauKy, datKhongChapNhan, ghiAppXuat, gopTuMay, kyTruoc, napToKhai, suaHoSo, tncnGanNhat, type Kho } from './core/kho'
+import type { ToKhaiDaNop } from './core/docToKhai'
+import { coMay } from './may/firebase'
+import { dangNhap, dangXuat, useNguoiDung } from './may/useMay'
+import { datCoTraVe, luuCongTy, luuDaXuat, luuTepHoaDon, luuToKhai, taiDuLieuMay, type DuLieuMay } from './may/dongBo'
+import { KhoHoSo } from './ui/KhoHoSo'
 import { NHAN_GTGT, NHAN_TNCN, tien } from './core/nhan'
 import type { CanhBao, HoSoDN, KyKeKhai, LoaiHD } from './core/types'
-import { docKho, luuKho } from './luuTru'
+import { docKho, luuKho, xoaKhoCua, xoaKhoKhach } from './luuTru'
 import { Buoc, DanhSachCanhBao, OTien, taiFile, VungThaFile } from './ui/chung'
 import { FormHoSo } from './ui/FormHoSo'
 import { BangHoaDon, khoaHD } from './ui/BangHoaDon'
@@ -36,11 +41,77 @@ function quyNhieuNhat(ds: { ngay: string }[]): KyKeKhai | null {
 }
 
 export default function App() {
-  const [kho, setKhoState] = useState<Kho>(() => docKho())
+  const { user, loi: loiDangNhap } = useNguoiDung()
+  // Ngăn lưu trên máy: chưa đăng nhập = ngăn khách; đăng nhập = ngăn riêng của tài khoản
+  const chuRef = useRef<string | null>(null)
+  const [kho, setKhoState] = useState<Kho>(() => docKho(null))
   const setKho = (k: Kho) => {
     setKhoState(k)
-    luuKho(k)
+    luuKho(k, chuRef.current)
   }
+  /** Cập nhật sổ dựa trên bản mới nhất (dùng khi chạy nền như đồng bộ mây) */
+  const capNhatKho = (fn: (k: Kho) => Kho) =>
+    setKhoState((cu) => {
+      const k = fn(cu)
+      luuKho(k, chuRef.current)
+      return k
+    })
+
+  // ---- Mây (Firebase): đăng nhập Google thì hồ sơ được lưu lên mây ----
+  const [may, setMay] = useState<DuLieuMay | null>(null)
+  const [trangThaiMay, setTrangThaiMay] = useState('')
+  /** Công ty khai lúc CHƯA đăng nhập trên máy này — chỉ đưa vào tài khoản khi người dùng đồng ý */
+  const [congTyKhach, setCongTyKhach] = useState(0)
+  async function lamMoiMay(uid: string) {
+    const du = await taiDuLieuMay(uid)
+    setMay(du)
+    capNhatKho((k) => gopTuMay(k, du.congTy, du.toKhai))
+    return du
+  }
+  useEffect(() => {
+    const chu = user?.uid ?? null
+    if (chuRef.current === chu) return
+    // Đổi người dùng: dọn sạch màn hình, mở đúng ngăn của người này
+    chuRef.current = chu
+    xoaHoaDon()
+    setMay(null)
+    setKhoState(docKho(chu))
+    if (!chu) {
+      setTrangThaiMay('')
+      setCongTyKhach(0)
+      return
+    }
+    setCongTyKhach(Object.keys(docKho(null).congTy).length)
+    setTrangThaiMay('Đang tải hồ sơ trên mây…')
+    lamMoiMay(chu)
+      .then(() => setTrangThaiMay(''))
+      .catch((e) => setTrangThaiMay(`⚠️ Không tải được hồ sơ trên mây: ${(e as Error).message}`))
+  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Người dùng đồng ý: đưa các công ty khai lúc chưa đăng nhập vào tài khoản này */
+  async function duaKhachVaoTaiKhoan() {
+    if (!user) return
+    const khach = docKho(null)
+    const ds = Object.values(khach.congTy)
+    try {
+      await Promise.all(ds.map((c) => luuCongTy(user.uid, c)))
+      capNhatKho((k) => {
+        const moi = structuredClone(k)
+        for (const c of ds) moi.congTy[c.hoSo.mst] ??= c
+        for (const [mst, theoKy] of Object.entries(khach.gtgt)) moi.gtgt[mst] = { ...theoKy, ...(moi.gtgt[mst] ?? {}) }
+        for (const [mst, theoKy] of Object.entries(khach.tncn)) moi.tncn[mst] = { ...theoKy, ...(moi.tncn[mst] ?? {}) }
+        moi.chon ??= khach.chon
+        return moi
+      })
+      xoaKhoKhach()
+      setCongTyKhach(0)
+      await lamMoiMay(user.uid)
+      setTrangThaiMay(`☁️ Đã đưa ${ds.length} công ty vào tài khoản. Kéo lại các file XML cũ để lưu cả tờ khai lên mây.`)
+    } catch (e) {
+      setTrangThaiMay(`⚠️ ${(e as Error).message}`)
+    }
+  }
+
   const [suaHoSoMo, setSuaHoSoMo] = useState(false)
   const [themCongTy, setThemCongTy] = useState(false)
   const [ky, setKyState] = useState<KyKeKhai>(() => quyCanKhai())
@@ -98,29 +169,38 @@ export default function App() {
     if (t) setNhapTNCN(Object.fromEntries(Object.keys(NHAP_TNCN_TRONG).map((k) => [k, t[k] ?? 0])) as unknown as NhapTNCN)
   }, [mst, ky.quy, ky.nam]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function nhanFile(ds: File[]) {
+  async function nhanFile(ds: File[], taiLen = true) {
     let k = kho
+    const xmlLen: { tk: ToKhaiDaNop; text: string; ten: string }[] = []
+    const excelLen: { ten: string; du: ArrayBuffer; teps: TepHoaDon[] }[] = []
     const nk: NhatKy[] = []
     const tepMoi: TepHoaDon[] = []
     for (const f of ds) {
       try {
         if (/\.xml$/i.test(f.name)) {
-          const kq = napToKhai(k, docToKhai(await f.text()), f.name)
+          const text = await f.text()
+          const tk = docToKhai(text)
+          const kq = napToKhai(k, tk, f.name)
           k = kq.kho
           nk.push({ ten: f.name, moTa: kq.moTa, loi: kq.loi })
+          if (!kq.loi) xmlLen.push({ tk, text, ten: f.name })
           continue
         }
         // CSV đọc dạng chữ để giữ đúng tiếng Việt và không bị đổi ngày kiểu Mỹ; Excel đọc nhị phân
-        const wb = /\.csv$/i.test(f.name) ? XLSX.read(await f.text(), { type: 'string', raw: true }) : XLSX.read(await f.arrayBuffer())
+        const du = await f.arrayBuffer()
+        const wb = /\.csv$/i.test(f.name) ? XLSX.read(new TextDecoder().decode(du), { type: 'string', raw: true }) : XLSX.read(du)
         let co = 0
+        const tepCuaFile: TepHoaDon[] = []
         for (const sh of wb.SheetNames) {
           const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sh], { header: 1, raw: true, defval: null })
           const t = docTep(rows as never, wb.SheetNames.length > 1 ? `${f.name}#${sh}` : f.name)
           if (t && t.hoaDon.length) {
             tepMoi.push(t)
+            tepCuaFile.push(t)
             co++
           }
         }
+        if (co) excelLen.push({ ten: f.name, du, teps: tepCuaFile })
         if (!co) nk.push({ ten: f.name, moTa: 'Không phải file "Danh sách hóa đơn" — bỏ qua', loi: true })
       } catch (e) {
         nk.push({ ten: f.name, moTa: `Không đọc được: ${(e as Error).message}`, loi: true })
@@ -130,6 +210,63 @@ export default function App() {
     setNhatKy((x) => [...x, ...nk])
     setTeps((x) => [...x.filter((t) => !tepMoi.some((m) => m.ten === t.ten)), ...tepMoi])
     setDaXuat(false)
+    if (user && taiLen && (xmlLen.length || excelLen.length)) void taiLenMay(user.uid, k, xmlLen, excelLen, [...teps, ...tepMoi])
+  }
+
+  async function taiLenMay(
+    uid: string,
+    k: Kho,
+    xmlLen: { tk: ToKhaiDaNop; text: string; ten: string }[],
+    excelLen: { ten: string; du: ArrayBuffer; teps: TepHoaDon[] }[],
+    tatCaTep: TepHoaDon[],
+  ) {
+    setTrangThaiMay(`Đang lưu ${xmlLen.length + excelLen.length} file lên mây…`)
+    try {
+      // Thông tin công ty phải có trên mây trước
+      const mstCanCo = new Set(xmlLen.map((x) => x.tk.hoSo.mst))
+      const mstHoaDon = k.chon ?? phanLoai(tatCaTep, null).mst
+      if (mstHoaDon && excelLen.length) mstCanCo.add(mstHoaDon)
+      await Promise.all([...mstCanCo].filter((m) => k.congTy[m]).map((m) => luuCongTy(uid, k.congTy[m])))
+      for (const x of xmlLen) await luuToKhai(uid, x.tk, x.text, x.ten)
+      let boQua = 0
+      for (const e of excelLen) {
+        if (!mstHoaDon || !k.congTy[mstHoaDon]) {
+          boQua++
+          continue
+        }
+        const p = phanLoai(e.teps, mstHoaDon)
+        const soBan = p.hoaDon.filter((h) => h.loai === 'ban').length
+        await luuTepHoaDon(uid, mstHoaDon, e.ten, e.du, quyNhieuNhat(p.hoaDon), soBan, p.hoaDon.length - soBan)
+      }
+      await lamMoiMay(uid)
+      setTrangThaiMay(`☁️ Đã lưu ${xmlLen.length + excelLen.length - boQua} file lên mây.${boQua ? ` ${boQua} file hoá đơn chưa lưu vì chưa rõ công ty — nạp tờ khai XML của công ty rồi kéo lại.` : ''}`)
+    } catch (e) {
+      setTrangThaiMay(`⚠️ Chưa lưu được lên mây: ${(e as Error).message}`)
+    }
+  }
+
+  /** Mở lại một quý từ kho trên mây: nạp lại các file Excel hoá đơn đã lưu */
+  function moLaiQuy(khoa: string, tep: { ten: string; du: ArrayBuffer }[]) {
+    xoaHoaDon()
+    const m = /^(\d{4})-Q(\d)$/.exec(khoa)
+    if (m) {
+      setKyState({ nam: Number(m[1]), quy: Number(m[2]) as 1 | 2 | 3 | 4 })
+      setKyTay(true)
+    }
+    void nhanFile(tep.map((t) => new File([t.du], t.ten)), false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function luuHoSoTay(h: HoSoDN) {
+    const k = suaHoSo(kho, h)
+    setKho(k)
+    if (user) luuCongTy(user.uid, k.congTy[h.mst]).then(() => lamMoiMay(user.uid)).catch((e) => setTrangThaiMay(`⚠️ ${(e as Error).message}`))
+  }
+
+  function datTraVe(mstCty: string, khoa: string, i: number, gt: boolean) {
+    const ids = kho.gtgt[mstCty]?.[khoa]?.[i]?.ids ?? []
+    setKho(datKhongChapNhan(kho, mstCty, khoa, i, gt))
+    if (user && ids.length) datCoTraVe(user.uid, mstCty, ids, gt).then(() => lamMoiMay(user.uid)).catch((e) => setTrangThaiMay(`⚠️ ${(e as Error).message}`))
   }
 
   function xoaHoaDon() {
@@ -167,13 +304,16 @@ export default function App() {
 
   function xuat(loai: 'gtgt' | 'tncn') {
     if (!hoSo || !mst) return
-    if (loai === 'gtgt') {
-      taiFile(tenFileXML('gtgt', ky, hoSo.mst), xmlGTGT(gtgt.toKhai, ky, hoSo, ngayLap))
-      setKho(ghiAppXuat(kho, mst, ky, ct))
-    } else {
-      taiFile(tenFileXML('tncn', ky, hoSo.mst), xmlTNCN(tncn.ct, ky, hoSo, ngayLap))
-    }
+    const ten = tenFileXML(loai, ky, hoSo.mst)
+    const xml = loai === 'gtgt' ? xmlGTGT(gtgt.toKhai, ky, hoSo, ngayLap) : xmlTNCN(tncn.ct, ky, hoSo, ngayLap)
+    taiFile(ten, xml)
+    if (loai === 'gtgt') setKho(ghiAppXuat(kho, mst, ky, ct))
     setDaXuat(true)
+    if (user) {
+      luuDaXuat(user.uid, mst, ky, loai, ten, xml, loai === 'gtgt' ? ct.ct40 : null)
+        .then(() => lamMoiMay(user.uid))
+        .catch((e) => setTrangThaiMay(`⚠️ Chưa lưu được file xuất lên mây: ${(e as Error).message}`))
+    }
   }
 
   const namNay = new Date().getFullYear()
@@ -185,6 +325,40 @@ export default function App() {
         <div className="mx-auto max-w-5xl px-4 py-4">
           <h1 className="text-2xl font-bold">Kê khai thuế quý</h1>
           <p className="text-emerald-100">01/GTGT (kèm phụ lục giảm thuế) và 05/KK-TNCN — xuất XML để nộp trên thuedientu.gdt.gov.vn</p>
+          {coMay && (
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+              {user ? (
+                <>
+                  <span>☁️ Đang lưu hồ sơ vào tài khoản <b>{user.email ?? 'Google'}</b></span>
+                  <button
+                    className="underline"
+                    onClick={() => {
+                      // Máy dùng chung: đăng xuất thì xoá bản sao trên máy (hồ sơ vẫn còn trên mây)
+                      xoaKhoCua(user.uid)
+                      void dangXuat()
+                    }}
+                  >
+                    Đăng xuất
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="rounded-lg bg-white px-3 py-1 font-medium text-emerald-800"
+                  onClick={() => dangNhap().catch((e) => setTrangThaiMay(`⚠️ Đăng nhập không được: ${(e as Error).message}`))}
+                >
+                  Đăng nhập Google để lưu hồ sơ lên mây
+                </button>
+              )}
+              {(loiDangNhap || trangThaiMay) && <span className="rounded bg-emerald-800 px-2 py-0.5">{loiDangNhap || trangThaiMay}</span>}
+              {user && congTyKhach > 0 && (
+                <span className="flex flex-wrap items-center gap-2 rounded bg-amber-100 px-2 py-1 text-amber-900">
+                  Trên máy này có {congTyKhach} công ty khai lúc chưa đăng nhập.
+                  <button className="font-medium underline" onClick={() => void duaKhachVaoTaiKhoan()}>Đưa vào tài khoản này</button>
+                  <button className="underline" onClick={() => setCongTyKhach(0)}>Không</button>
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
@@ -230,13 +404,13 @@ export default function App() {
           {themCongTy && (
             <div className="mb-4 rounded-xl bg-slate-50 p-3">
               <p className="mb-2 text-sm text-slate-600">Khai hộ công ty khác: kéo file XML tờ khai của công ty đó vào bước 1 (nhanh nhất), hoặc gõ tay:</p>
-              <FormHoSo giaTri={null} onLuu={(h) => { setKho(suaHoSo(kho, h)); setThemCongTy(false) }} onHuy={() => setThemCongTy(false)} />
+              <FormHoSo giaTri={null} onLuu={(h) => { luuHoSoTay(h); setThemCongTy(false) }} onHuy={() => setThemCongTy(false)} />
             </div>
           )}
           {!hoSo ? (
             <p className="text-slate-600">Chưa có công ty. Kéo một file <b>tờ khai XML đã nộp</b> (hoặc file Excel hoá đơn) vào bước 1 — app tự điền.</p>
           ) : suaHoSoMo ? (
-            <FormHoSo giaTri={hoSo} onLuu={(h) => { setKho(suaHoSo(kho, h)); setSuaHoSoMo(false) }} onHuy={() => setSuaHoSoMo(false)} />
+            <FormHoSo giaTri={hoSo} onLuu={(h) => { luuHoSoTay(h); setSuaHoSoMo(false) }} onHuy={() => setSuaHoSoMo(false)} />
           ) : (
             <>
               <div className="grid gap-1 text-base sm:grid-cols-2">
@@ -253,12 +427,19 @@ export default function App() {
               <details className="mt-3" open={dk.xungDot}>
                 <summary className="cursor-pointer font-medium text-emerald-800">Sổ theo dõi tờ khai đã nạp (kiểm đầu kỳ – cuối kỳ)</summary>
                 <div className="mt-2">
-                  <SoTheoDoi kho={kho} mst={hoSo.mst} onKhongChapNhan={(khoa, i, gt) => setKho(datKhongChapNhan(kho, hoSo.mst, khoa, i, gt))} />
+                  <SoTheoDoi kho={kho} mst={hoSo.mst} onKhongChapNhan={(khoa, i, gt) => datTraVe(hoSo.mst, khoa, i, gt)} />
                 </div>
               </details>
             </>
           )}
         </Buoc>
+
+        {user && may && mst && (
+          <section className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 sm:p-6">
+            <h2 className="mb-3 text-xl font-semibold text-slate-800">☁️ Kho hồ sơ trên mây — {hoSo?.tenNNT}</h2>
+            <KhoHoSo may={may} mst={mst} onMoLai={moLaiQuy} />
+          </section>
+        )}
 
         {/* 3. Kỳ */}
         <Buoc so={3} tieuDe="Kỳ kê khai">
@@ -400,7 +581,9 @@ export default function App() {
           </ol>
           <p className="mt-3 text-sm text-slate-500">Nếu cổng thuế báo lỗi file: dùng “Kê khai trực tuyến” và gõ các con số ở bước 5, 6 vào.</p>
         </Buoc>
-        <p className="pb-6 text-center text-xs text-slate-400">Mọi dữ liệu chỉ xử lý và lưu trên máy này, không gửi đi đâu.</p>
+        <p className="pb-6 text-center text-xs text-slate-400">
+          {user ? 'Hồ sơ được lưu vào tài khoản Google đang đăng nhập — chỉ tài khoản này xem được.' : 'Chưa đăng nhập: mọi dữ liệu chỉ xử lý và lưu trên máy này, không gửi đi đâu.'}
+        </p>
       </main>
     </div>
   )
