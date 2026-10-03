@@ -15,6 +15,7 @@ import { coMay } from './may/firebase'
 import { dangNhap, dangXuat, useNguoiDung } from './may/useMay'
 import { boSungHoaDonTep, boSungPhuLuc, datCoTraVe, xoaCongTyTrenMay, xoaTaiLieu, type NhomTaiLieu, luuChungTu, luuCongTy, luuDaXuat, luuTepHoaDon, luuToKhai, taiDuLieuMay, taiTep, type DuLieuMay } from './may/dongBo'
 import { KhoHoSo } from './ui/KhoHoSo'
+import { Logo, TaiKhoan } from './ui/DauTrang'
 import { NHAN_GTGT, NHAN_TNCN, tien } from './core/nhan'
 import type { CanhBao, HoSoDN, KyKeKhai, LoaiHD } from './core/types'
 import { docKho, luuKho, xoaKhoCua, xoaKhoKhach } from './luuTru'
@@ -564,35 +565,40 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800">
-      <header className="bg-emerald-700 text-white">
-        <div className="mx-auto max-w-5xl px-4 py-4">
-          <h1 className="text-2xl font-bold">Kê khai thuế quý</h1>
-          <p className="text-emerald-100">01/GTGT (kèm phụ lục giảm thuế) và 05/KK-TNCN — xuất XML để nộp trên thuedientu.gdt.gov.vn</p>
+      <header className="sticky top-0 z-40 bg-emerald-700 text-white shadow-md">
+        <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-2">
+          <Logo className="h-10 w-10 shrink-0" />
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-bold leading-tight sm:text-xl">Kê khai thuế quý</h1>
+            <p className="hidden truncate text-xs text-emerald-100 sm:block">01/GTGT (kèm phụ lục giảm thuế) và 05/KK-TNCN — xuất XML để nộp trên thuedientu.gdt.gov.vn</p>
+          </div>
           {coMay && (
-            <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+            <div className="ml-auto shrink-0">
               {user ? (
-                <>
-                  <span>☁️ Đang lưu hồ sơ vào tài khoản <b>{user.email ?? 'Google'}</b></span>
-                  <button
-                    className="underline"
-                    onClick={() => {
-                      // Máy dùng chung: đăng xuất thì xoá bản sao trên máy (hồ sơ vẫn còn trên mây)
-                      xoaKhoCua(user.uid)
-                      void dangXuat()
-                    }}
-                  >
-                    Đăng xuất
-                  </button>
-                </>
+                <TaiKhoan
+                  user={user}
+                  onDangXuat={() => {
+                    // Máy dùng chung: đăng xuất thì xoá bản sao trên máy (hồ sơ vẫn còn trên mây)
+                    xoaKhoCua(user.uid)
+                    void dangXuat()
+                  }}
+                />
               ) : (
                 <button
-                  className="rounded-lg bg-white px-3 py-1 font-medium text-emerald-800"
+                  className="rounded-full bg-white px-3 py-1.5 text-sm font-medium text-emerald-800 hover:bg-emerald-50"
                   onClick={() => dangNhap().catch((e) => setTrangThaiMay(`⚠️ Đăng nhập không được: ${(e as Error).message}`))}
                 >
-                  Đăng nhập Google để lưu hồ sơ lên mây
+                  <span className="sm:hidden">Đăng nhập</span>
+                  <span className="hidden sm:inline">Đăng nhập Google để lưu lên mây</span>
                 </button>
               )}
-              {(loiDangNhap || trangThaiMay) && <span className="rounded bg-emerald-800 px-2 py-0.5">{loiDangNhap || trangThaiMay}</span>}
+            </div>
+          )}
+        </div>
+        {coMay && (loiDangNhap || trangThaiMay || (user && congTyKhach > 0)) && (
+          <div className="border-t border-emerald-600/60 bg-emerald-800/60">
+            <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-3 px-4 py-1.5 text-sm">
+              {(loiDangNhap || trangThaiMay) && <span>{loiDangNhap || trangThaiMay}</span>}
               {user && congTyKhach > 0 && (
                 <span className="flex flex-wrap items-center gap-2 rounded bg-amber-100 px-2 py-1 text-amber-900">
                   Trên máy này có {congTyKhach} công ty khai lúc chưa đăng nhập.
@@ -601,8 +607,8 @@ export default function App() {
                 </span>
               )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </header>
 
       <main className="mx-auto max-w-5xl space-y-5 px-4 py-6">
