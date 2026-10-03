@@ -13,7 +13,7 @@ import { NapHangLoat, TongQuanDN } from './ui/TongQuan'
 import type { ToKhaiDaNop } from './core/docToKhai'
 import { coMay } from './may/firebase'
 import { dangNhap, dangXuat, useNguoiDung } from './may/useMay'
-import { datCoTraVe, luuChungTu, luuCongTy, luuDaXuat, luuTepHoaDon, luuToKhai, taiDuLieuMay, taiTep, type DuLieuMay } from './may/dongBo'
+import { boSungHoaDonTep, datCoTraVe, luuChungTu, luuCongTy, luuDaXuat, luuTepHoaDon, luuToKhai, taiDuLieuMay, taiTep, type DuLieuMay } from './may/dongBo'
 import { KhoHoSo } from './ui/KhoHoSo'
 import { NHAN_GTGT, NHAN_TNCN, tien } from './core/nhan'
 import type { CanhBao, HoSoDN, KyKeKhai, LoaiHD } from './core/types'
@@ -71,7 +71,35 @@ export default function App() {
     capNhatKho((k) =>
       gopTuMay(k, du.congTy, du.toKhai, du.chungTu, Object.entries(du.tepHoaDon).flatMap(([mst, ds]) => ds.map((d) => ({ mst, hd: d.hd ?? [] })))),
     )
+    void boSungFileCu(uid, du)
     return du
+  }
+
+  /** File Excel lưu bằng bản cũ chưa có danh sách hoá đơn rút gọn: tải về, đọc lại, bổ sung (chạy 1 lần) */
+  const dangBoSung = useRef(false)
+  async function boSungFileCu(uid: string, du: DuLieuMay) {
+    const thieu = Object.entries(du.tepHoaDon).flatMap(([mst, ds]) => ds.filter((d) => !d.hd && /\.(xlsx|xls|csv)$/i.test(d.ten)).map((d) => ({ mst, d })))
+    if (!thieu.length || dangBoSung.current) return
+    dangBoSung.current = true
+    let xong = 0
+    try {
+      for (const { mst: m, d } of thieu) {
+        setTrangThaiMay(`Đang bổ sung dữ liệu hoá đơn cho file cũ ${++xong}/${thieu.length}…`)
+        const buf = await taiTep(d.duongDan)
+        const wb = /\.csv$/i.test(d.ten) ? XLSX.read(new TextDecoder().decode(buf), { type: 'string', raw: true }) : XLSX.read(buf)
+        const ts = wb.SheetNames.map((sh) => docTep(XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sh], { header: 1, raw: true, defval: null }) as never, d.ten)).filter((t): t is TepHoaDon => !!t)
+        const p = phanLoai(ts, m)
+        const soBan = p.hoaDon.filter((h) => h.loai === 'ban').length
+        await boSungHoaDonTep(uid, m, d.id, rutGonHoaDon(p.hoaDon), soBan, p.hoaDon.length - soBan)
+        capNhatKho((k) => napHoaDon(k, m, p.hoaDon))
+      }
+      setTrangThaiMay(`☁️ Đã bổ sung dữ liệu hoá đơn cho ${thieu.length} file cũ.`)
+      setMay(await taiDuLieuMay(uid))
+    } catch (e) {
+      setTrangThaiMay(`⚠️ Chưa bổ sung được dữ liệu hoá đơn cho file cũ: ${(e as Error).message}`)
+    } finally {
+      dangBoSung.current = false
+    }
   }
   useEffect(() => {
     const chu = user?.uid ?? null
@@ -214,6 +242,9 @@ export default function App() {
         nk.push({ ten: f.name, moTa: `Không đọc được: ${(e as Error).message}`, loi: true })
       }
     }
+    // Hoá đơn trong file Excel cũng vào sổ hoá đơn (để Tổng quan / đối tác thấy)
+    const mstHD = k.chon ?? phanLoai([...teps, ...tepMoi], null).mst
+    if (mstHD && tepMoi.length) k = napHoaDon(k, mstHD, phanLoai(tepMoi, mstHD).hoaDon)
     if (k !== kho) setKho(k)
     setNhatKy((x) => [...x, ...nk])
     setTeps((x) => [...x.filter((t) => !tepMoi.some((m) => m.ten === t.ten)), ...tepMoi])
@@ -244,7 +275,7 @@ export default function App() {
         }
         const p = phanLoai(e.teps, mstHoaDon)
         const soBan = p.hoaDon.filter((h) => h.loai === 'ban').length
-        await luuTepHoaDon(uid, mstHoaDon, e.ten, e.du, quyNhieuNhat(p.hoaDon), soBan, p.hoaDon.length - soBan)
+        await luuTepHoaDon(uid, mstHoaDon, e.ten, e.du, quyNhieuNhat(p.hoaDon), soBan, p.hoaDon.length - soBan, rutGonHoaDon(p.hoaDon))
       }
       await lamMoiMay(uid)
       setTrangThaiMay(`☁️ Đã lưu ${xmlLen.length + excelLen.length - boQua} file lên mây.${boQua ? ` ${boQua} file hoá đơn chưa lưu vì chưa rõ công ty — nạp tờ khai XML của công ty rồi kéo lại.` : ''}`)

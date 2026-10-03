@@ -92,6 +92,11 @@ export async function luuChungTu(uid: string, ct: ChungTu, xml: string, tenFile:
   await setDoc(doc(db, `${nhanhCongTy(uid, ct.mst)}/chungTu/${id}`), { ...ct, duongDan, tenFile, napLuc: serverTimestamp() })
 }
 
+/** Bổ sung danh sách hoá đơn rút gọn cho file đã lưu trước đây (bản cũ chưa có) */
+export async function boSungHoaDonTep(uid: string, mst: string, id: string, hd: HoaDonGon[], soBan: number, soMua: number) {
+  await updateDoc(doc(db, `${nhanhCongTy(uid, mst)}/tepHoaDon/${id}`), { hd, soBan, soMua })
+}
+
 export async function datCoTraVe(uid: string, mst: string, ids: string[], gt: boolean) {
   await Promise.all(ids.map((id) => updateDoc(doc(db, `${nhanhCongTy(uid, mst)}/toKhai/${id}`), { khongChapNhan: gt })))
 }
