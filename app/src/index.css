@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 /* Màu biểu đồ: bảng màu đã kiểm định (xanh = doanh thu, cam = mua vào), phân biệt được cả với người mù màu */
+:root,
 .viz-root {
   --series-1: #2a78d6;
   --series-2: #eb6834;
