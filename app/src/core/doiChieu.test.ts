@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as XLSX from 'xlsx'
-import { docTep, gopHoaDon, phanLoai, type TepHoaDon } from './excel'
+import { docTep, gopHoaDon, phanLoai, phuSongCuaTep, type TepHoaDon } from './excel'
 import { tinhGTGT, NHAP_TAY_TRONG } from './gtgt'
 import { docToKhai } from './docToKhai'
 import { khoTrong, napToKhai, soCai } from './kho'
@@ -101,7 +101,7 @@ describe.skipIf(!coDuLieu)('Đối chiếu với tờ khai 01/GTGT đã nộp', 
 })
 
 import { docTaiLieu } from './taiLieu'
-import { napHoaDon, napTaiLieu } from './kho'
+import { ghiPhuSong, napHoaDon, napTaiLieu } from './kho'
 import { tinhDoiTac, tinhTongQuan } from './tongQuan'
 
 interface CaTongQuan {
@@ -140,6 +140,8 @@ describe.skipIf(!coDuLieu || !caTQ)('Tổng quan dựng từ toàn bộ hồ sơ
     })
     const pl = phanLoai(teps, cfg!.mst)
     kho = napHoaDon(kho, cfg!.mst, pl.hoaDon)
+    // ghi nhận tháng phủ của từng file, giống hệt app
+    for (const t of teps) kho = ghiPhuSong(kho, cfg!.mst, phuSongCuaTep(t, phanLoai([t], cfg!.mst).hoaDon))
 
     const tq = tinhTongQuan(kho, cfg!.mst, new Date(caTQ!.homNay))
     expect(tq.tuQuy).toBe(caTQ!.tuQuy)

@@ -178,7 +178,19 @@ function GhiChuNguon({ nguonQuy, loai }: { nguonQuy: DoiTac['nguonQuy']; loai: '
   const nhom = (n: NguonQuy) => nguonQuy.filter((q) => q[loai] === n).map((q) => tenKy(q.khoa))
   const dong: [string, string[], string][] = [
     ['Theo hoá đơn (danh sách trọn kỳ)', nhom('hoaDon'), 'text-emerald-800'],
-    ['Theo phụ lục tờ khai 01/GTGT', [...nhom('toKhai'), ...nhom('toKhaiThieuHD').map((x) => `${x} (hoá đơn chưa đủ)`)], 'text-slate-700'],
+    [
+      'Theo phụ lục tờ khai 01/GTGT',
+      [
+        ...nhom('toKhai'),
+        ...nguonQuy
+          .filter((q) => q[loai] === 'toKhaiThieuHD')
+          .map((q) => {
+            const thieu = q.thangThieu?.[loai] ?? []
+            return `${tenKy(q.khoa)} (danh sách hoá đơn chưa đủ${thieu.length ? `: thiếu tháng ${thieu.map((t) => Number(t.slice(5))).join(', ')}` : ''})`
+          }),
+      ],
+      'text-slate-700',
+    ],
     ['Chưa có dữ liệu', nhom('thieu'), 'text-amber-800'],
   ]
   return (

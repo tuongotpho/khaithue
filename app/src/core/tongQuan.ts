@@ -190,9 +190,10 @@ export function tinhTongQuan(kho: Kho, mst: string, homNay = new Date()): TongQu
 // Hai nguồn, theo từng quý:
 //  - HOÁ ĐƠN (Excel/XML): chi tiết nhất — có MST, số hoá đơn, ngày.
 //  - PHỤ LỤC TỜ KHAI 01/GTGT: mục II = người mua, mục I = người bán (hàng 8%). Chỉ có tên, không có MST.
-// Mỗi quý, mỗi chiều: có hoá đơn từ DANH SÁCH TRỌN KỲ (Excel tải từ cổng hoá đơn) -> dùng hoá đơn
-// (kể cả khi lệch tờ khai: hoá đơn là gốc, tờ khai có thể khai sai). Chỉ có vài hoá đơn XML lẻ hoặc
-// không có hoá đơn -> dùng PHỤ LỤC tờ khai. (Không so số tiền: tờ khai khai thừa sẽ đánh lừa phép so.)
+// Mỗi quý, mỗi chiều chọn MỘT nguồn (không bao giờ cộng cả hai -> không trùng):
+//  - HOÁ ĐƠN nếu có danh sách Excel và đủ: các file phủ đủ 3 tháng của quý, HOẶC tổng hoá đơn không nhỏ hơn
+//    phụ lục (file cũ chưa ghi được tháng phủ). Đủ thì tin hoá đơn kể cả khi tờ khai khai thừa (hoá đơn là gốc).
+//  - Ngược lại (chỉ vài hoá đơn XML lẻ, hoặc Excel thiếu tháng, hoặc không có hoá đơn) -> PHỤ LỤC tờ khai.
 
 export interface DongDoiTac {
   khoa: string
@@ -215,8 +216,8 @@ export interface DoiTac {
   mua: DongDoiTac[]
   tongBan: number
   tongMua: number
-  /** Từng quý trong khoảng: lấy đối tác từ nguồn nào */
-  nguonQuy: { khoa: string; ban: NguonQuy; mua: NguonQuy }[]
+  /** Từng quý trong khoảng: lấy đối tác từ nguồn nào; thangThieu = tháng chưa có danh sách hoá đơn */
+  nguonQuy: { khoa: string; ban: NguonQuy; mua: NguonQuy; thangThieu?: { ban: string[]; mua: string[] } }[]
 }
 
 // Chữ viết tắt hay gặp trong tên doanh nghiệp (phụ lục tờ khai hay viết tắt, hoá đơn thì viết đủ).
@@ -297,17 +298,25 @@ export function tinhDoiTac(kho: Kho, mst: string, nam: number | null): DoiTac {
   for (const k of [...cacQuy].sort()) {
     const tt = tinhTrangKy(kho, mst, k)
     const pb = tt.boSungMoiNhat ?? tt.lanDau
-    const ng: { khoa: string; ban: NguonQuy; mua: NguonQuy } = { khoa: k, ban: 'thieu', mua: 'thieu' }
+    const ng: DoiTac['nguonQuy'][number] = { khoa: k, ban: 'thieu', mua: 'thieu' }
+    const ky = tuChuoi(k)
+    const thangQuy = [0, 1, 2].map((i) => `${ky.nam}-${String((ky.quy - 1) * 3 + 1 + i).padStart(2, '0')}`)
     for (const l of ['ban', 'mua'] as const) {
       const dsHD = hdTheoQuy.get(`${k}|${l}`) ?? []
       const pl = l === 'ban' ? (pb?.plBan ?? []).map((d) => ({ ten: d.ten, v: d.giaTri, t: d.thueGiam * 4 })) : (pb?.plMua ?? []).map((d) => ({ ten: d.ten, v: d.giaTri, t: d.thue }))
-      const tronKy = dsHD.some((h) => !h.x)
-      if (tronKy || (dsHD.length && !pl.length)) {
+      const coDanhSach = dsHD.some((h) => !h.x)
+      const phu = kho.phuSong?.[mst]?.[l] ?? []
+      const thieuThang = thangQuy.filter((t) => !phu.includes(t))
+      const tongHD = dsHD.reduce((s, h) => s + h.v, 0)
+      const tongPL = pl.reduce((s, d) => s + d.v, 0)
+      const du = coDanhSach && (thieuThang.length === 0 || tongHD >= tongPL - 1000)
+      if (du || (dsHD.length && !pl.length)) {
         ng[l] = 'hoaDon'
         for (const h of dsHD) them(l, h.ten, l === 'ban' ? h.mm ?? '' : h.mb, h.v, h.t, k, h.ng, true)
       } else if (pl.length) {
         // thuế bán ra 8% của dòng = 4 × số thuế được giảm 2% (đúng theo cách lập phụ lục)
         ng[l] = dsHD.length ? 'toKhaiThieuHD' : 'toKhai'
+        if (dsHD.length && thieuThang.length) (ng.thangThieu ??= { ban: [], mua: [] })[l] = thieuThang
         for (const d of pl) them(l, d.ten, '', d.v, d.t, k, '', false)
       }
     }

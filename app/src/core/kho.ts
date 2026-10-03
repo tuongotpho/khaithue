@@ -81,6 +81,8 @@ export interface Kho {
   toKhaiKhac?: Record<string, Record<string, ToKhaiKhac>>
   chungTu?: Record<string, Record<string, ChungTu>>
   hoaDon?: Record<string, Record<string, HoaDonGon>>
+  /** Các tháng (yyyy-MM) đã có DANH SÁCH hoá đơn tải từ cổng thuế, theo chiều — để biết quý nào đủ */
+  phuSong?: Record<string, { ban: string[]; mua: string[] }>
 }
 
 export const khoTrong = (): Kho => ({ phienBan: 1, chon: null, congTy: {}, gtgt: {}, tncn: {} })
@@ -274,7 +276,7 @@ export function gopTuMay(
   congTy: CongTyLuu[],
   toKhai: ToKhaiMay[],
   chungTu: ChungTu[] = [],
-  hoaDon: { mst: string; hd: HoaDonGon[] }[] = [],
+  hoaDon: { mst: string; hd: HoaDonGon[]; phu?: { ban: string[]; mua: string[] } }[] = [],
 ): Kho {
   let kho = kho0
   for (const t of toKhai) {
@@ -307,7 +309,8 @@ export function gopTuMay(
   }
   kho = structuredClone(kho)
   for (const c of chungTu) ((kho.chungTu ??= {})[c.mst] ??= {})[c.so] = c
-  for (const { mst, hd } of hoaDon) {
+  for (const { mst, hd, phu } of hoaDon) {
+    if (phu) kho = ghiPhuSong(kho, mst, phu)
     kho = napHoaDon(kho, mst, hd.filter((g) => !g.x).map((g) => moRongHoaDon(g, mst)))
     kho = napHoaDon(kho, mst, hd.filter((g) => g.x).map((g) => moRongHoaDon(g, mst)), true)
   }
@@ -386,4 +389,14 @@ export function moRongHoaDon(g: HoaDonGon, mst: string): HoaDon {
 /** Rút gọn danh sách hoá đơn để lưu lên mây cùng file Excel */
 export function rutGonHoaDon(ds: HoaDon[], tuXmlLe = false): HoaDonGon[] {
   return ds.map((h) => ({ ...(tuXmlLe ? { x: 1 as const } : {}), l: h.loai, mb: h.mstBan, mm: h.mstMua, kh: h.kyHieu, so: h.so, ng: h.ngay, ten: h.loai === 'ban' ? h.tenMua : h.tenBan, v: h.chuaThue, t: h.thue, tt: h.trangThai }))
+}
+
+/** Ghi nhận các tháng đã có danh sách hoá đơn (hợp nhất, không trùng) */
+export function ghiPhuSong(kho0: Kho, mst: string, phu: { ban: string[]; mua: string[] }): Kho {
+  if (!phu.ban.length && !phu.mua.length) return kho0
+  const kho: Kho = structuredClone(kho0)
+  const cu = ((kho.phuSong ??= {})[mst] ??= { ban: [], mua: [] })
+  cu.ban = [...new Set([...cu.ban, ...phu.ban])].sort()
+  cu.mua = [...new Set([...cu.mua, ...phu.mua])].sort()
+  return kho
 }

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
-import { conHieuLuc, docTep, gopHoaDon, kiemSoHoaDonBan, phanLoai, type TepHoaDon } from './core/excel'
+import { conHieuLuc, docTep, gopHoaDon, kiemSoHoaDonBan, phanLoai, phuSongCuaTep, type TepHoaDon } from './core/excel'
 import { kiemDauKy, tinhGTGT, NHAP_TAY_TRONG, type NhapTayGTGT, type SuaPhuLucMua } from './core/gtgt'
 import { tinhTNCN, NHAP_TNCN_TRONG, type NhapTNCN } from './core/tncn'
 import { docToKhai } from './core/docToKhai'
 import { tenFileXML, xmlGTGT, xmlTNCN } from './core/xml'
 import { denNgay, hanNop, ngayISO, quyCanKhai, tuNgay } from './core/ky'
-import { dauKy, datKhongChapNhan, ghiAppXuat, gopTuMay, kyTruoc, napHoaDon, napTaiLieu, napToKhai, rutGonHoaDon, suaHoSo, tncnGanNhat, type Kho } from './core/kho'
+import { dauKy, datKhongChapNhan, ghiAppXuat, ghiPhuSong, gopTuMay, kyTruoc, napHoaDon, napTaiLieu, napToKhai, rutGonHoaDon, suaHoSo, tncnGanNhat, type Kho } from './core/kho'
 import { docTaiLieu } from './core/taiLieu'
 import { tinhDoiTac, tinhTongQuan } from './core/tongQuan'
 import { NapHangLoat, TongQuanDN } from './ui/TongQuan'
@@ -69,7 +69,7 @@ export default function App() {
     const du = await taiDuLieuMay(uid)
     setMay(du)
     capNhatKho((k) =>
-      gopTuMay(k, du.congTy, du.toKhai, du.chungTu, Object.entries(du.tepHoaDon).flatMap(([mst, ds]) => ds.map((d) => ({ mst, hd: d.hd ?? [] })))),
+      gopTuMay(k, du.congTy, du.toKhai, du.chungTu, Object.entries(du.tepHoaDon).flatMap(([mst, ds]) => ds.map((d) => ({ mst, hd: d.hd ?? [], phu: d.phu })))),
     )
     void boSungFileCu(uid, du)
     return du
@@ -78,7 +78,7 @@ export default function App() {
   /** File Excel lưu bằng bản cũ chưa có danh sách hoá đơn rút gọn: tải về, đọc lại, bổ sung (chạy 1 lần) */
   const dangBoSung = useRef(false)
   async function boSungFileCu(uid: string, du: DuLieuMay) {
-    const thieu = Object.entries(du.tepHoaDon).flatMap(([mst, ds]) => ds.filter((d) => !d.hd?.length && d.soBan + d.soMua > 0 && /\.(xlsx|xls|csv)$/i.test(d.ten)).map((d) => ({ mst, d })))
+    const thieu = Object.entries(du.tepHoaDon).flatMap(([mst, ds]) => ds.filter((d) => (!d.hd?.length || !d.phu) && d.soBan + d.soMua > 0 && /\.(xlsx|xls|csv)$/i.test(d.ten)).map((d) => ({ mst, d })))
     // Tờ khai 01/GTGT lưu bằng bản cũ chưa có phụ lục người mua / người bán
     const thieuPL = du.toKhai.filter((t) => t.maTKhai === '842' && t.plMua === undefined && t.duongDan)
     if ((!thieu.length && !thieuPL.length) || dangBoSung.current) return
@@ -98,8 +98,9 @@ export default function App() {
         const ts = wb.SheetNames.map((sh) => docTep(XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sh], { header: 1, raw: true, defval: null }) as never, d.ten)).filter((t): t is TepHoaDon => !!t)
         const p = phanLoai(ts, m)
         const soBan = p.hoaDon.filter((h) => h.loai === 'ban').length
-        await boSungHoaDonTep(uid, m, d.id, rutGonHoaDon(p.hoaDon), soBan, p.hoaDon.length - soBan)
-        capNhatKho((k) => napHoaDon(k, m, p.hoaDon))
+        const phu = phuSongFile(ts, m)
+        await boSungHoaDonTep(uid, m, d.id, rutGonHoaDon(p.hoaDon), soBan, p.hoaDon.length - soBan, phu)
+        capNhatKho((k) => ghiPhuSong(napHoaDon(k, m, p.hoaDon), m, phu))
       }
       setTrangThaiMay(`☁️ Đã bổ sung dữ liệu cho ${thieuPL.length} tờ khai và ${thieu.length} file hoá đơn cũ.`)
       const moi = await taiDuLieuMay(uid)
@@ -254,7 +255,10 @@ export default function App() {
     }
     // Hoá đơn trong file Excel cũng vào sổ hoá đơn (để Tổng quan / đối tác thấy)
     const mstHD = k.chon ?? phanLoai([...teps, ...tepMoi], null).mst
-    if (mstHD && tepMoi.length) k = napHoaDon(k, mstHD, phanLoai(tepMoi, mstHD).hoaDon)
+    if (mstHD && tepMoi.length) {
+      k = napHoaDon(k, mstHD, phanLoai(tepMoi, mstHD).hoaDon)
+      k = ghiPhuSong(k, mstHD, phuSongFile(tepMoi, mstHD))
+    }
     if (k !== kho) setKho(k)
     setNhatKy((x) => [...x, ...nk])
     setTeps((x) => [...x.filter((t) => !tepMoi.some((m) => m.ten === t.ten)), ...tepMoi])
@@ -285,13 +289,24 @@ export default function App() {
         }
         const p = phanLoai(e.teps, mstHoaDon)
         const soBan = p.hoaDon.filter((h) => h.loai === 'ban').length
-        await luuTepHoaDon(uid, mstHoaDon, e.ten, e.du, quyNhieuNhat(p.hoaDon), soBan, p.hoaDon.length - soBan, rutGonHoaDon(p.hoaDon))
+        await luuTepHoaDon(uid, mstHoaDon, e.ten, e.du, quyNhieuNhat(p.hoaDon), soBan, p.hoaDon.length - soBan, rutGonHoaDon(p.hoaDon), phuSongFile(e.teps, mstHoaDon))
       }
       await lamMoiMay(uid)
       setTrangThaiMay(`☁️ Đã lưu ${xmlLen.length + excelLen.length - boQua} file lên mây.${boQua ? ` ${boQua} file hoá đơn chưa lưu vì chưa rõ công ty — nạp tờ khai XML của công ty rồi kéo lại.` : ''}`)
     } catch (e) {
       setTrangThaiMay(`⚠️ Chưa lưu được lên mây: ${(e as Error).message}`)
     }
+  }
+
+  /** Các tháng mà các sheet của MỘT file phủ, sau khi đã xếp bán/mua theo công ty */
+  function phuSongFile(ts: TepHoaDon[], mstCty: string) {
+    const kq = { ban: [] as string[], mua: [] as string[] }
+    for (const t of ts) {
+      const p = phuSongCuaTep(t, phanLoai([t], mstCty).hoaDon)
+      kq.ban.push(...p.ban)
+      kq.mua.push(...p.mua)
+    }
+    return { ban: [...new Set(kq.ban)].sort(), mua: [...new Set(kq.mua)].sort() }
   }
 
   /** Mở lại một quý từ kho trên mây: nạp lại các file Excel hoá đơn đã lưu */
@@ -372,11 +387,13 @@ export default function App() {
           continue
         }
         const p = phanLoai(ts, mstCty)
+        const phu = phuSongFile(ts, mstCty)
         k = napHoaDon(k, mstCty, p.hoaDon)
+        k = ghiPhuSong(k, mstCty, phu)
         dem.excel++
         if (uid && k.congTy[mstCty]) {
           const soBan = p.hoaDon.filter((h) => h.loai === 'ban').length
-          viec.push(() => luuTepHoaDon(uid, mstCty, f.name, du, quyNhieuNhat(p.hoaDon), soBan, p.hoaDon.length - soBan, rutGonHoaDon(p.hoaDon)))
+          viec.push(() => luuTepHoaDon(uid, mstCty, f.name, du, quyNhieuNhat(p.hoaDon), soBan, p.hoaDon.length - soBan, rutGonHoaDon(p.hoaDon), phu))
         }
       } catch {
         dem.boQua++

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { docTaiLieu, kyCuaChungTu, kyDangChu, tenTieuMuc } from './taiLieu'
-import { ghiAppXuat, khoTrong, napHoaDon, napTaiLieu, type Kho } from './kho'
+import { ghiAppXuat, ghiPhuSong, khoTrong, napHoaDon, napTaiLieu, type Kho } from './kho'
 import { tinhTongQuan } from './tongQuan'
 import type { HoaDon } from './types'
 
@@ -141,10 +141,35 @@ describe('Đối tác lấy từ phụ lục tờ khai khi quý chưa có hoá �
     chuaThue: v, thue: v * 0.08, trangThai: 'Hóa đơn mới', file: 'ds.xlsx',
   })
 
+  it('TÌM ĐƯỢC FILE CÁC NĂM TRƯỚC: thiếu tháng thì giữ phụ lục; đủ tháng thì chuyển sang hoá đơn; KHÔNG cộng trùng', () => {
+    // Tờ khai quý 4/2025: bán cho Khách 300 triệu (phụ lục)
+    let kho = nap(khoTrong(), tkPL('4/2025', [['Khách', 300_000_000]], []))
+    const thang = (so: string, ngay: string, thangPhu: string) => {
+      kho = napHoaDon(kho, MST, [tuExcel(so, ngay, 'Khách', '0300000001', 100_000_000)])
+      kho = ghiPhuSong(kho, MST, { ban: [thangPhu], mua: [] })
+    }
+    // 1) Mới tìm được file tháng 10
+    thang('1', '10/10/2025', '2025-10')
+    let d = tinhDoiTac(kho, MST, 2025)
+    expect(d.nguonQuy).toEqual([{ khoa: '2025-Q4', ban: 'toKhaiThieuHD', mua: 'thieu', thangThieu: { ban: ['2025-11', '2025-12'], mua: [] } }])
+    expect(d.tongBan).toBe(300_000_000) // vẫn theo phụ lục, KHÔNG cộng thêm 100 triệu của tháng 10
+    // 2) Tìm thêm tháng 11, 12
+    thang('2', '10/11/2025', '2025-11')
+    thang('3', '10/12/2025', '2025-12')
+    d = tinhDoiTac(kho, MST, 2025)
+    expect(d.nguonQuy).toMatchObject([{ ban: 'hoaDon' }])
+    expect(d.tongBan).toBe(300_000_000) // theo hoá đơn, KHÔNG cộng thêm phụ lục
+    expect(d.ban).toMatchObject([{ mst: '0300000001', n: 3, tuToKhai: false }])
+    // 3) Nạp lại file tháng 10 lần nữa: không đổi
+    thang('1', '10/10/2025', '2025-10')
+    expect(tinhDoiTac(kho, MST, 2025).tongBan).toBe(300_000_000)
+  })
+
   it('quý chưa có hoá đơn: lấy từ phụ lục; quý có danh sách hoá đơn trọn kỳ: chỉ dùng hoá đơn (không cộng trùng)', () => {
     let kho = nap(khoTrong(), tkPL('1/2025', [['CÔNG TY A', 1000]], [['NCC X', 500, 40]]))
     kho = nap(kho, tkPL('3/2025', [['CÔNG TY A', 999_999]], [])) // quý 3 có Excel trọn kỳ -> bỏ phụ lục này
     kho = napHoaDon(kho, MST, [tuExcel('7', '15/08/2025', 'Khách', '0300000001', 100_000_000)])
+    kho = ghiPhuSong(kho, MST, { ban: ['2025-07', '2025-08', '2025-09'], mua: [] })
     const d = tinhDoiTac(kho, MST, 2025)
     expect(d.nguonQuy).toEqual([
       { khoa: '2025-Q1', ban: 'toKhai', mua: 'toKhai' },
@@ -159,13 +184,14 @@ describe('Đối tác lấy từ phụ lục tờ khai khi quý chưa có hoá �
     let kho = nap(khoTrong(), tkPL('3/2025', [['Khách', 100_000_000], ['CÔNG TY A', 50_000_000]], []))
     kho = nap(kho, hoaDonXml) // 1 hoá đơn XML lẻ quý 3
     const d = tinhDoiTac(kho, MST, 2025)
-    expect(d.nguonQuy).toEqual([{ khoa: '2025-Q3', ban: 'toKhaiThieuHD', mua: 'thieu' }])
+    expect(d.nguonQuy).toMatchObject([{ khoa: '2025-Q3', ban: 'toKhaiThieuHD', mua: 'thieu' }])
     expect(d.tongBan).toBe(150_000_000)
   })
 
   it('danh sách trọn kỳ được tin hơn tờ khai, kể cả khi tờ khai khai thừa', () => {
     let kho = nap(khoTrong(), tkPL('3/2025', [['Khách', 190_000_000]], [])) // tờ khai khai thừa
     kho = napHoaDon(kho, MST, [tuExcel('7', '15/08/2025', 'Khách', '0300000001', 100_000_000)])
+    kho = ghiPhuSong(kho, MST, { ban: ['2025-07', '2025-08', '2025-09'], mua: [] }) // danh sách đủ 3 tháng
     expect(tinhDoiTac(kho, MST, 2025)).toMatchObject({ tongBan: 100_000_000, nguonQuy: [{ ban: 'hoaDon' }] })
   })
 
@@ -185,5 +211,23 @@ describe('So tên doanh nghiệp viết tắt', () => {
     expect(chuanTen('Công ty CP Năng lượng xanh Thăng Long')).toBe(chuanTen('CÔNG TY CỔ PHẦN NĂNG LƯỢNG XANH THĂNG LONG'))
     expect(chuanTen('Cty TNHH MTV  TM-DV Hà An')).toBe(chuanTen('CÔNG TY TNHH MỘT THÀNH VIÊN THƯƠNG MẠI DỊCH VỤ HÀ AN'))
     expect(chuanTen('Công ty TNHH Năng lượng VNG')).not.toBe(chuanTen('Công ty TNHH Năng lượng VNC'))
+  })
+})
+
+import { cacThang, docTep, phanLoai as phanLoaiTep, phuSongCuaTep } from './excel'
+
+describe('Tháng phủ của file Excel', () => {
+  it('đọc kỳ trên đầu file và các tháng có hoá đơn', () => {
+    expect(cacThang('01/11/2025', '31/01/2026')).toEqual(['2025-11', '2025-12', '2026-01'])
+    const rows = [
+      ['DANH SÁCH HÓA ĐƠN'],
+      ['Từ ngày 01/01/2026 đến ngày 31/01/2026'], // file tự gộp: tiêu đề tháng 1 nhưng có hoá đơn tháng 3
+      ['STT', 'Ký hiệu mẫu số', 'Ký hiệu hóa đơn', 'Số hóa đơn', 'Ngày lập', 'MST người bán/MST người xuất hàng', 'Tên người bán/Tên người xuất hàng', 'MST người mua/MST người nhận hàng', 'Tên người mua/Tên người nhận hàng', 'Địa chỉ người mua', 'Tổng tiền chưa thuế', 'Tổng tiền thuế', 'Trạng thái hóa đơn'],
+      [1, '1', 'C26TAA', '1', '05/01/2026', MST, 'Cty', '0300000001', 'Khách', 'HN', 100, 8, 'Hóa đơn mới'],
+      [2, '1', 'C26TAA', '2', '05/03/2026', MST, 'Cty', '0300000001', 'Khách', 'HN', 100, 8, 'Hóa đơn mới'],
+    ]
+    const t = docTep(rows, 'gop.xlsx')!
+    expect([t.tu, t.den]).toEqual(['01/01/2026', '31/01/2026'])
+    expect(phuSongCuaTep(t, phanLoaiTep([t], MST).hoaDon)).toEqual({ ban: ['2026-01', '2026-03'], mua: [] })
   })
 })

@@ -50,6 +50,9 @@ export interface TepHoaDon {
   hoaDon: HoaDon[] // loai tạm, phanLoai() sẽ gán lại
   /** Gợi ý theo tiêu đề cột — chỉ dùng khi MST không đủ để phân biệt */
   goiY: LoaiHD | null
+  /** Kỳ tải về ghi trên đầu file: "Từ ngày tu đến ngày den" (dd/MM/yyyy) */
+  tu?: string
+  den?: string
 }
 
 /** Đọc một sheet "DANH SÁCH HÓA ĐƠN". Không phải danh sách hoá đơn thì trả null. */
@@ -99,7 +102,18 @@ export function docTep(rows: O[][], tenFile: string): TepHoaDon | null {
       file: tenFile,
     })
   }
-  return { ten: tenFile, hoaDon, goiY }
+  // Dòng "Từ ngày 01/10/2025 đến ngày 31/10/2025" phía trên tiêu đề
+  let tu: string | undefined
+  let den: string | undefined
+  for (const r of rows.slice(0, iTieuDe)) {
+    const m = /Từ ngày\s*(\d{1,2}\/\d{1,2}\/\d{4})\s*đến ngày\s*(\d{1,2}\/\d{1,2}\/\d{4})/i.exec((r ?? []).map(chuan).join(' '))
+    if (m) {
+      tu = m[1]
+      den = m[2]
+      break
+    }
+  }
+  return { ten: tenFile, hoaDon, goiY, tu, den }
 }
 
 export interface KetQuaPhanLoai {
@@ -268,6 +282,45 @@ export function kiemSoHoaDonBan(ban: HoaDon[]): CanhBao[] {
     if (thieu.length) {
       kq.push({ muc: 'chu_y', noiDung: `Hoá đơn bán ra ký hiệu ${kh} hụt số ${thieu.slice(0, 15).join(', ')}${thieu.length > 15 ? '…' : ''}. Kiểm tra đã tải đủ file các tháng chưa (hoặc các số đó thuộc quý khác / đã huỷ).` })
     }
+  }
+  return kq
+}
+
+/** Các tháng (yyyy-MM) từ ngày tu đến ngày den */
+export function cacThang(tu: string, den: string): string[] {
+  const a = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(tu)
+  const b = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(den)
+  if (!a || !b) return []
+  const kq: string[] = []
+  for (let y = Number(a[3]), m = Number(a[2]); y * 12 + m <= Number(b[3]) * 12 + Number(b[2]) && kq.length < 60; m === 12 ? (y++, (m = 1)) : m++) {
+    kq.push(`${y}-${String(m).padStart(2, '0')}`)
+  }
+  return kq
+}
+
+export interface PhuSong {
+  ban: string[]
+  mua: string[]
+}
+
+/**
+ * Một file "Danh sách hóa đơn" phủ những tháng nào, cho chiều nào (bán ra / mua vào).
+ * = các tháng trong kỳ ghi trên đầu file  +  các tháng thực có hoá đơn trong file
+ *   (file người dùng tự gộp nhiều tháng thường giữ nguyên tiêu đề của tháng đầu).
+ * `hoaDon`: hoá đơn của file đã được phanLoai() xếp bán/mua.
+ */
+export function phuSongCuaTep(t: TepHoaDon, hoaDon: HoaDon[]): PhuSong {
+  const kq: PhuSong = { ban: [], mua: [] }
+  const theoKy = t.tu && t.den ? cacThang(t.tu, t.den) : []
+  for (const l of ['ban', 'mua'] as const) {
+    const ds = hoaDon.filter((h) => h.loai === l)
+    if (!ds.length) continue
+    const thang = new Set(theoKy)
+    for (const h of ds) {
+      const m = /^\d{1,2}\/(\d{1,2})\/(\d{4})/.exec(h.ngay)
+      if (m) thang.add(`${m[2]}-${m[1].padStart(2, '0')}`)
+    }
+    kq[l] = [...thang].sort()
   }
   return kq
 }

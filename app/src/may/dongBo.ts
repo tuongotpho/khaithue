@@ -57,13 +57,18 @@ export interface TepHoaDonMay {
   duongDan: string
   /** Hoá đơn rút gọn trong file — để dựng tổng quan mà không phải tải lại file */
   hd?: HoaDonGon[]
+  /** Các tháng file này phủ (theo kỳ ghi trên đầu file + tháng có hoá đơn), theo chiều */
+  phu?: { ban: string[]; mua: string[] }
 }
 
-export async function luuTepHoaDon(uid: string, mst: string, ten: string, du: ArrayBuffer, ky: KyKeKhai | null, soBan: number, soMua: number, hd: HoaDonGon[] = []) {
+export async function luuTepHoaDon(
+  uid: string, mst: string, ten: string, du: ArrayBuffer, ky: KyKeKhai | null, soBan: number, soMua: number,
+  hd: HoaDonGon[] = [], phu: { ban: string[]; mua: string[] } = { ban: [], mua: [] },
+) {
   const id = await maBam(du)
   const duongDan = `nguoiDung/${uid}/${mst}/hoaDon/${id}/${tenAnToan(ten)}`
   await uploadBytes(ref(luuTru, duongDan), new Uint8Array(du))
-  const ghi: Omit<TepHoaDonMay, 'id'> = { ten, ky: ky ? khoaKy(ky) : '', soBan, soMua, kichThuoc: du.byteLength, duongDan, hd }
+  const ghi: Omit<TepHoaDonMay, 'id'> = { ten, ky: ky ? khoaKy(ky) : '', soBan, soMua, kichThuoc: du.byteLength, duongDan, hd, phu }
   await setDoc(doc(db, `${nhanhCongTy(uid, mst)}/tepHoaDon/${id}`), { ...ghi, napLuc: serverTimestamp() })
 }
 
@@ -93,8 +98,8 @@ export async function luuChungTu(uid: string, ct: ChungTu, xml: string, tenFile:
 }
 
 /** Bổ sung danh sách hoá đơn rút gọn cho file đã lưu trước đây (bản cũ chưa có) */
-export async function boSungHoaDonTep(uid: string, mst: string, id: string, hd: HoaDonGon[], soBan: number, soMua: number) {
-  await updateDoc(doc(db, `${nhanhCongTy(uid, mst)}/tepHoaDon/${id}`), { hd, soBan, soMua })
+export async function boSungHoaDonTep(uid: string, mst: string, id: string, hd: HoaDonGon[], soBan: number, soMua: number, phu: { ban: string[]; mua: string[] }) {
+  await updateDoc(doc(db, `${nhanhCongTy(uid, mst)}/tepHoaDon/${id}`), { hd, soBan, soMua, phu })
 }
 
 /** Bổ sung phụ lục (người mua / người bán) cho tờ khai lưu bằng bản cũ */
