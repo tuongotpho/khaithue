@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["https://khaithue.vercel.app", "http://localhost:5179", "http://localhost:5181", "http://localhost:5182"],
+    "method": ["GET", "HEAD"],
+    "responseHeader": ["Content-Type", "Content-Length", "Content-Range", "Content-Disposition", "Range", "x-goog-meta-firebaseStorageDownloadTokens"],
+    "maxAgeSeconds": 3600
+  }
+]

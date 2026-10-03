@@ -370,6 +370,7 @@ export default function App() {
     setTab('keKhai')
     if (coFile.length && user) {
       void Promise.all(coFile.map(async (h) => ({ ten: h.ten, du: await taiTep(h.duongDan) }))).then((tep) => moLaiQuy(khoa, tep))
+        .catch((e) => setTrangThaiMay(`⚠️ Không tải được file hoá đơn quý này từ mây: ${(e as Error).message}`))
     } else {
       const m = /^(\d{4})-Q(\d)$/.exec(khoa)
       if (m) {

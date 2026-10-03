@@ -15,6 +15,7 @@ function taiVeMay(ten: string, du: ArrayBuffer) {
 /** Kho hồ sơ trên mây của một công ty, xếp theo quý */
 export function KhoHoSo({ may, mst, onMoLai }: { may: DuLieuMay; mst: string; onMoLai: (khoa: string, tep: { ten: string; du: ArrayBuffer }[]) => void }) {
   const [ban, setBan] = useState('')
+  const [loi, setLoi] = useState('')
   const toKhai = may.toKhai.filter((t) => t.mst === mst)
   const hoaDon = may.tepHoaDon[mst] ?? []
   const daXuat = may.daXuat[mst] ?? []
@@ -23,8 +24,11 @@ export function KhoHoSo({ may, mst, onMoLai }: { may: DuLieuMay; mst: string; on
 
   async function tai(ten: string, duongDan: string) {
     setBan(duongDan)
+    setLoi('')
     try {
       taiVeMay(ten, await taiTep(duongDan))
+    } catch (e) {
+      setLoi(`Không tải được file từ mây: ${(e as Error).message}`)
     } finally {
       setBan('')
     }
@@ -32,9 +36,12 @@ export function KhoHoSo({ may, mst, onMoLai }: { may: DuLieuMay; mst: string; on
 
   async function moLai(khoa: string) {
     setBan(khoa)
+    setLoi('')
     try {
       const ds = hoaDon.filter((h) => h.ky === khoa)
       onMoLai(khoa, await Promise.all(ds.map(async (h) => ({ ten: h.ten, du: await taiTep(h.duongDan) }))))
+    } catch (e) {
+      setLoi(`Không tải được file từ mây: ${(e as Error).message}`)
     } finally {
       setBan('')
     }
@@ -42,6 +49,7 @@ export function KhoHoSo({ may, mst, onMoLai }: { may: DuLieuMay; mst: string; on
 
   return (
     <div className="space-y-3">
+      {loi && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">⛔ {loi}</p>}
       {cacKy.map((khoa) => {
         const tk = toKhai.filter((t) => t.ky === khoa).sort((a, b) => a.maTKhai.localeCompare(b.maTKhai) || a.soLan - b.soLan)
         const hd = hoaDon.filter((h) => h.ky === khoa)
