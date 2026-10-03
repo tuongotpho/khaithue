@@ -1,0 +1,55 @@
+// Tên chỉ tiêu lấy nguyên văn (rút gọn) từ đặc tả XSD của HTKK
+
+export const NHAN_GTGT: [string, string][] = [
+  ['ct22', 'Thuế GTGT còn được khấu trừ kỳ trước chuyển sang'],
+  ['ct23', 'Giá trị HHDV mua vào (chưa thuế)'],
+  ['ct24', 'Thuế GTGT của HHDV mua vào'],
+  ['ct23a', 'Trong đó: giá trị HHDV nhập khẩu'],
+  ['ct24a', 'Trong đó: thuế GTGT HHDV nhập khẩu'],
+  ['ct25', 'Thuế GTGT của HHDV mua vào được khấu trừ kỳ này'],
+  ['ct26', 'HHDV bán ra không chịu thuế GTGT'],
+  ['ct27', 'Giá trị HHDV bán ra chịu thuế = [29]+[30]+[32]+[32a]'],
+  ['ct28', 'Thuế GTGT HHDV bán ra = [31]+[33]'],
+  ['ct29', 'HHDV bán ra chịu thuế suất 0%'],
+  ['ct30', 'Giá trị HHDV bán ra thuế suất 5%'],
+  ['ct31', 'Thuế GTGT HHDV bán ra thuế suất 5%'],
+  ['ct32', 'Giá trị HHDV bán ra thuế suất 10%'],
+  ['ct33', 'Thuế GTGT HHDV bán ra thuế suất 10%'],
+  ['ct32a', 'HHDV bán ra không tính thuế'],
+  ['ct34', 'Tổng doanh thu HHDV bán ra = [26]+[27]'],
+  ['ct35', 'Tổng thuế GTGT HHDV bán ra = [28]'],
+  ['ct36', 'Thuế GTGT phát sinh trong kỳ = [35]−[25]'],
+  ['ct37', 'Điều chỉnh giảm thuế còn được khấu trừ các kỳ trước'],
+  ['ct38', 'Điều chỉnh tăng thuế còn được khấu trừ các kỳ trước'],
+  ['ct39a', 'Thuế GTGT nhận bàn giao được khấu trừ trong kỳ'],
+  ['ct40a', 'Thuế GTGT phải nộp của hoạt động SXKD trong kỳ'],
+  ['ct40b', 'Thuế GTGT mua vào của dự án đầu tư được bù trừ'],
+  ['ct40', 'Thuế GTGT còn phải nộp trong kỳ = [40a]−[40b]'],
+  ['ct41', 'Thuế GTGT chưa khấu trừ hết kỳ này'],
+  ['ct42', 'Tổng số thuế GTGT đề nghị hoàn'],
+  ['ct43', 'Thuế GTGT còn được khấu trừ chuyển kỳ sau = [41]−[42]'],
+]
+
+export const NHAN_TNCN: [string, string, boolean][] = [
+  // [chỉ tiêu, tên, nhập tay?]
+  ['ct16', 'Tổng số người lao động', true],
+  ['ct17', 'Trong đó: cá nhân cư trú có hợp đồng lao động', true],
+  ['ct18', 'Tổng số cá nhân đã khấu trừ thuế = [19]+[20]', false],
+  ['ct19', '— Cá nhân cư trú', true],
+  ['ct20', '— Cá nhân không cư trú', true],
+  ['ct21', 'Tổng thu nhập chịu thuế trả cho cá nhân = [22]+[23]', false],
+  ['ct22', '— Cá nhân cư trú', true],
+  ['ct23', '— Cá nhân không cư trú', true],
+  ['ct24', 'Trong đó: TNCT từ phí mua bảo hiểm của DN bảo hiểm nước ngoài', true],
+  ['ct25', 'Trong đó: TNCT được miễn theo Hợp đồng dầu khí', true],
+  ['ct25_1', 'Thu nhập miễn thuế theo nghị quyết', true],
+  ['ct26', 'Tổng TNCT thuộc diện phải khấu trừ thuế = [27]+[28]', false],
+  ['ct27', '— Cá nhân cư trú', true],
+  ['ct28', '— Cá nhân không cư trú', true],
+  ['ct29', 'Tổng số thuế TNCN đã khấu trừ = [30]+[31]', false],
+  ['ct30', '— Cá nhân cư trú', true],
+  ['ct31', '— Cá nhân không cư trú', true],
+  ['ct32', 'Trong đó: thuế đã khấu trừ trên phí mua bảo hiểm', true],
+]
+
+export const tien = (n: number) => n.toLocaleString('vi-VN')

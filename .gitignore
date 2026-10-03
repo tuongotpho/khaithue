@@ -1,0 +1,8 @@
+# Dữ liệu thật của công ty (ca đối chiếu, MST, số liệu) — TUYỆT ĐỐI không đưa lên GitHub
+du-lieu-rieng/
+
+app/node_modules/
+app/dist/
+app/.xml-ra/
+.claude/
+.vercel/
