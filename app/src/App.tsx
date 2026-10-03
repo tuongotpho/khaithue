@@ -896,7 +896,7 @@ export default function App() {
       </main>
 
       <footer className="border-t border-slate-200 px-4 py-5 text-center text-xs text-slate-500">
-        <p>©2026 August87. Bảo lưu mọi quyền.</p>
+        <p>©2026 August87-0982722036. Bảo lưu mọi quyền.</p>
         <p className="mt-1">Công cụ hỗ trợ lập tờ khai — kiểm tra lại số liệu trước khi nộp lên cơ quan thuế.</p>
       </footer>
     </div>
