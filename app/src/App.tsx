@@ -132,12 +132,12 @@ export default function App() {
   const [nhap, setNhap] = useState<NhapTayGTGT>(NHAP_TAY_TRONG)
   const [ct22Tay, setCt22Tay] = useState<number | null>(null)
   const [suaMua, setSuaMua] = useState<SuaPhuLucMua>({})
-  const [coTNCN, setCoTNCN] = useState(true)
+  const [coTNCN, setCoTNCN] = useState(false) // 05/KK-TNCN mặc định tắt, quý nào có khai thì bật
   const [nhapTNCN, setNhapTNCN] = useState<NhapTNCN>(NHAP_TNCN_TRONG)
   const [ngayLap, setNgayLap] = useState(ngayISO())
   const [hienItDung, setHienItDung] = useState(false)
   const [daXuat, setDaXuat] = useState(false)
-  const [tab, setTab] = useState<'tongQuan' | 'keKhai'>(() => (Object.keys(docKho(null).gtgt).length ? 'tongQuan' : 'keKhai'))
+  const [tab, setTab] = useState<'tongQuan' | 'keKhai' | 'kho'>(() => (Object.keys(docKho(null).gtgt).length ? 'tongQuan' : 'keKhai'))
   const [tienDo, setTienDo] = useState<{ xong: number; tong: number; dangLam: string } | null>(null)
   const [ketQuaNap, setKetQuaNap] = useState('')
 
@@ -255,6 +255,7 @@ export default function App() {
 
   /** Mở lại một quý từ kho trên mây: nạp lại các file Excel hoá đơn đã lưu */
   function moLaiQuy(khoa: string, tep: { ten: string; du: ArrayBuffer }[]) {
+    setTab('keKhai')
     xoaHoaDon()
     const m = /^(\d{4})-Q(\d)$/.exec(khoa)
     if (m) {
@@ -489,8 +490,8 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-5xl space-y-5 px-4 py-6">
-        <nav className="flex gap-2">
-          {([['tongQuan', '📊 Tổng quan doanh nghiệp'], ['keKhai', '📝 Kê khai quý']] as const).map(([k, ten]) => (
+        <nav className="flex flex-wrap gap-2">
+          {([['tongQuan', '📊 Tổng quan'], ['keKhai', '📝 Kê khai quý'], ['kho', '🗂 Kho hồ sơ']] as const).map(([k, ten]) => (
             <button key={k} onClick={() => setTab(k)} className={`rounded-xl px-4 py-2 font-medium ${tab === k ? 'bg-emerald-700 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'}`}>
               {ten}
             </button>
@@ -509,6 +510,32 @@ export default function App() {
             {ketQuaNap && <p className="text-sm text-emerald-800">{ketQuaNap}</p>}
             {!user && coMay && <p className="text-sm text-slate-500">Mẹo: đăng nhập Google (trên cùng) trước khi nạp để hồ sơ được lưu lên mây, mở ở máy khác cũng thấy.</p>}
             {tq && hoSo ? <TongQuanDN tq={tq} tenCty={hoSo.tenNNT} onMoQuy={moQuyKeKhai} /> : <p className="text-slate-500">Nạp hồ sơ để xem tổng quan.</p>}
+          </section>
+        )}
+
+        {tab === 'kho' && (
+          <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-4 sm:p-6">
+            <h2 className="text-xl font-semibold">
+              🗂 Kho hồ sơ {hoSo && <span className="text-base font-normal text-slate-500">— {hoSo.tenNNT} (MST {hoSo.mst})</span>}
+            </h2>
+            {!hoSo ? (
+              <p className="text-slate-500">Chưa có công ty. Nạp hồ sơ ở tab 📊 Tổng quan.</p>
+            ) : (
+              <>
+                <div>
+                  <h3 className="mb-1 font-semibold">Sổ theo dõi tờ khai 01/GTGT (kiểm đầu kỳ – cuối kỳ)</h3>
+                  <SoTheoDoi kho={kho} mst={hoSo.mst} onKhongChapNhan={(khoa, i, gt) => datTraVe(hoSo.mst, khoa, i, gt)} />
+                </div>
+                <div>
+                  <h3 className="mb-1 font-semibold">☁️ File đã lưu trên mây, theo quý</h3>
+                  {user && may && mst ? (
+                    <KhoHoSo may={may} mst={mst} onMoLai={moLaiQuy} />
+                  ) : (
+                    <p className="text-sm text-slate-500">{coMay ? 'Đăng nhập Google (trên cùng) để xem và tải lại file đã lưu trên mây.' : 'Mở bản web để dùng kho trên mây.'}</p>
+                  )}
+                </div>
+              </>
+            )}
           </section>
         )}
 
@@ -574,22 +601,16 @@ export default function App() {
                 {congTy?.suaTay ? 'Đã sửa tay — tờ khai XML nạp sau chỉ điền thêm ô còn trống.' : congTy?.kyNguon ? `Tự điền từ tờ khai quý ${congTy.kyNguon.replace(/^(\d{4})-Q(\d)$/, '$2/$1')}.` : 'Tạm lấy từ hoá đơn.'}
               </p>
               <DanhSachCanhBao ds={canhBaoHoSo} />
-              <details className="mt-3" open={dk.xungDot}>
-                <summary className="cursor-pointer font-medium text-emerald-800">Sổ theo dõi tờ khai đã nạp (kiểm đầu kỳ – cuối kỳ)</summary>
-                <div className="mt-2">
-                  <SoTheoDoi kho={kho} mst={hoSo.mst} onKhongChapNhan={(khoa, i, gt) => datTraVe(hoSo.mst, khoa, i, gt)} />
-                </div>
-              </details>
+              {dk.xungDot && (
+                <p className="mt-2 text-sm text-red-700">
+                  ⛔ Quý trước có nhiều bản lần đầu khác số liệu — sang tab{' '}
+                  <button className="underline" onClick={() => setTab('kho')}>🗂 Kho hồ sơ</button> đánh dấu bản bị cơ quan thuế trả về.
+                </p>
+              )}
             </>
           )}
         </Buoc>
 
-        {user && may && mst && (
-          <section className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 sm:p-6">
-            <h2 className="mb-3 text-xl font-semibold text-slate-800">☁️ Kho hồ sơ trên mây — {hoSo?.tenNNT}</h2>
-            <KhoHoSo may={may} mst={mst} onMoLai={moLaiQuy} />
-          </section>
-        )}
 
         {/* 3. Kỳ */}
         <Buoc so={3} tieuDe="Kỳ kê khai">
