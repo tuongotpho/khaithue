@@ -4,8 +4,8 @@
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
-import { getBytes, ref, uploadBytes } from 'firebase/storage'
+import { deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore'
+import { deleteObject, getBytes, ref, uploadBytes } from 'firebase/storage'
 
 let env: RulesTestEnvironment
 
@@ -36,6 +36,11 @@ describe('Firestore: mỗi người chỉ thấy vùng của mình', () => {
     await assertFails(getDoc(doc(la, 'nguoiDung/anh/congTy/0100000000')))
     await assertFails(setDoc(doc(la, 'nguoiDung/anh/congTy/0100000000'), HO_SO))
   })
+  it('XOÁ: chủ xoá được; người khác KHÔNG xoá được', async () => {
+    await env.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'nguoiDung/anh/congTy/0100000000'), HO_SO) })
+    await assertFails(deleteDoc(doc(env.authenticatedContext('nguoi-la').firestore(), 'nguoiDung/anh/congTy/0100000000')))
+    await assertSucceeds(deleteDoc(doc(env.authenticatedContext('anh').firestore(), 'nguoiDung/anh/congTy/0100000000')))
+  })
   it('chưa đăng nhập: cấm hết', async () => {
     const an = env.unauthenticatedContext().firestore()
     await assertFails(getDoc(doc(an, 'nguoiDung/anh/congTy/0100000000')))
@@ -59,6 +64,12 @@ describe('Storage: file tờ khai / hoá đơn', () => {
     const la = env.authenticatedContext('nguoi-la').storage()
     await assertFails(getBytes(ref(la, 'nguoiDung/anh/0100000000/toKhai/a.xml')))
     await assertFails(uploadBytes(ref(la, 'nguoiDung/anh/0100000000/toKhai/a.xml'), tep))
+  })
+  it('XOÁ file: người khác không xoá được, chủ xoá được', async () => {
+    const duong = 'nguoiDung/anh/0100000000/hoaDon/x.xlsx'
+    await assertSucceeds(uploadBytes(ref(env.authenticatedContext('anh').storage(), duong), tep))
+    await assertFails(deleteObject(ref(env.authenticatedContext('nguoi-la').storage(), duong)))
+    await assertSucceeds(deleteObject(ref(env.authenticatedContext('anh').storage(), duong)))
   })
   it('chưa đăng nhập: cấm', async () => {
     await assertFails(uploadBytes(ref(env.unauthenticatedContext().storage(), 'nguoiDung/anh/x.xml'), tep))

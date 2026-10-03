@@ -400,3 +400,19 @@ export function ghiPhuSong(kho0: Kho, mst: string, phu: { ban: string[]; mua: st
   cu.mua = [...new Set([...cu.mua, ...phu.mua])].sort()
   return kho
 }
+
+/** Bỏ toàn bộ dữ liệu của MỘT công ty khỏi sổ trên máy (để làm mới / sau khi xoá trên mây) */
+export function boCongTy(kho0: Kho, mst: string, giuThongTin = true): Kho {
+  const kho: Kho = structuredClone(kho0)
+  delete kho.gtgt[mst]
+  delete kho.tncn[mst]
+  delete kho.toKhaiKhac?.[mst]
+  delete kho.chungTu?.[mst]
+  delete kho.hoaDon?.[mst]
+  delete kho.phuSong?.[mst]
+  if (!giuThongTin) {
+    delete kho.congTy[mst]
+    if (kho.chon === mst) kho.chon = Object.keys(kho.congTy)[0] ?? null
+  }
+  return kho
+}

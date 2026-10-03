@@ -10,8 +10,8 @@
 //
 // Mã bản ghi = mã băm SHA-256 của nội dung file: nạp lại cùng một file không sinh bản trùng.
 
-import { collection, doc, getDocs, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
-import { getBytes, ref, uploadBytes } from 'firebase/storage'
+import { collection, deleteDoc, doc, getDocs, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
+import { deleteObject, getBytes, ref, uploadBytes } from 'firebase/storage'
 import { db, luuTru } from './firebase'
 import type { CongTyLuu, HoaDonGon, ToKhaiMay } from '../core/kho'
 import type { ChungTu } from '../core/taiLieu'
@@ -143,4 +143,29 @@ export async function taiDuLieuMay(uid: string): Promise<DuLieuMay> {
 
 export async function taiTep(duongDan: string): Promise<ArrayBuffer> {
   return getBytes(ref(luuTru, duongDan))
+}
+
+// ---------------- XOÁ (không hoàn tác được) ----------------
+
+export type NhomTaiLieu = 'toKhai' | 'tepHoaDon' | 'chungTu' | 'daXuat'
+
+/** Xoá 1 tài liệu: bản ghi số liệu + file gốc trên Storage */
+export async function xoaTaiLieu(uid: string, mst: string, nhom: NhomTaiLieu, id: string, duongDan?: string) {
+  if (duongDan) await deleteObject(ref(luuTru, duongDan)).catch((e) => {
+    if ((e as { code?: string }).code !== 'storage/object-not-found') throw e
+  })
+  await deleteDoc(doc(db, `${nhanhCongTy(uid, mst)}/${nhom}/${id}`))
+}
+
+/** Xoá TOÀN BỘ hồ sơ một công ty của tài khoản này trên mây. Trả về số tài liệu đã xoá. */
+export async function xoaCongTyTrenMay(uid: string, mst: string, tienDo?: (xong: number, tong: number) => void): Promise<number> {
+  const nhom: NhomTaiLieu[] = ['toKhai', 'tepHoaDon', 'chungTu', 'daXuat']
+  const ds = (await Promise.all(nhom.map(async (n) => (await getDocs(collection(db, `${nhanhCongTy(uid, mst)}/${n}`))).docs.map((d) => ({ n, id: d.id, duongDan: (d.data() as { duongDan?: string }).duongDan }))))).flat()
+  let xong = 0
+  for (const d of ds) {
+    await xoaTaiLieu(uid, mst, d.n, d.id, d.duongDan)
+    tienDo?.(++xong, ds.length)
+  }
+  await deleteDoc(doc(db, nhanhCongTy(uid, mst)))
+  return ds.length
 }

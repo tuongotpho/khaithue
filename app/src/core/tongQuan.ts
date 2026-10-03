@@ -2,6 +2,7 @@
 // Nguồn: sổ tờ khai (01/GTGT, 05/KK-TNCN), chứng từ nộp tiền, hoá đơn rút gọn.
 
 import type { CanhBao, KyKeKhai } from './types'
+import { tachThueSuat } from './gtgt'
 import { denNgay, hanNop } from './ky'
 import { khoaKy, soCai, tenKy, tinhTrangKy, type Kho, type PhienBanGTGT, type ToKhaiKhac } from './kho'
 import { kyCuaChungTu, type ChungTu } from './taiLieu'
@@ -334,4 +335,93 @@ export function tinhDoiTac(kho: Kho, mst: string, nam: number | null): DoiTac {
   const b = xep('ban')
   const m = xep('mua')
   return { ban: b.kq, mua: m.kq, tongBan: b.tong, tongMua: m.tong, nguonQuy }
+}
+
+// ---------------- ĐỐI SOÁT tờ khai ↔ hoá đơn (để kiểm dữ liệu đã nạp có chuẩn không) ----------------
+
+export interface HoaDonNgan {
+  kh: string
+  so: string
+  ng: string
+  v: number
+  t: number
+  tt: string
+}
+
+export interface DongDoiSoatDT {
+  l: 'ban' | 'mua'
+  ten: string
+  mst: string
+  hd: number // giá trị chịu thuế 8% theo hoá đơn
+  pl: number // giá trị trên phụ lục tờ khai
+  lech: number // hd - pl
+  hoaDon: HoaDonNgan[]
+}
+
+export interface DoiSoatChieu {
+  tk: number | null // [34] (bán) / [23] (mua) trên tờ khai đang hiệu lực
+  hd: number // tổng hoá đơn còn hiệu lực
+  n: number
+  lech: number | null // hd - tk
+  thangCo: string[] // tháng trong quý đã có danh sách hoá đơn
+}
+
+export interface DoiSoatQuy {
+  khoa: string
+  ban: DoiSoatChieu
+  mua: DoiSoatChieu
+  /** Đối tác lệch giữa phụ lục tờ khai và hoá đơn (chỉ so khi tờ khai có phụ lục chiều đó) */
+  doiTac: DongDoiSoatDT[]
+}
+
+export function tinhDoiSoat(kho: Kho, mst: string): DoiSoatQuy[] {
+  const tatCaHD = Object.values(kho.hoaDon?.[mst] ?? {}).filter((h) => !laHuy(h.tt))
+  const mstTheoTen = new Map<string, string>()
+  for (const h of tatCaHD) {
+    const m = h.l === 'ban' ? h.mm : h.mb
+    if (m) mstTheoTen.set(chuanTen(h.ten), m)
+  }
+  const khoaDT = (ten: string, m?: string) => m || mstTheoTen.get(chuanTen(ten)) || chuanTen(ten)
+  const cacQuy = new Set([...Object.keys(kho.gtgt[mst] ?? {}), ...tatCaHD.map((h) => quyCuaNgay(h.ng)).filter((q): q is string => !!q)])
+  const kq: DoiSoatQuy[] = []
+  for (const k of [...cacQuy].filter((x) => /^\d{4}-Q\d$/.test(x)).sort().reverse()) {
+    const tt = tinhTrangKy(kho, mst, k)
+    const pb = tt.boSungMoiNhat ?? tt.lanDau
+    const ky = tuChuoi(k)
+    const thangQuy = [0, 1, 2].map((i) => `${ky.nam}-${String((ky.quy - 1) * 3 + 1 + i).padStart(2, '0')}`)
+    const dsQuy = tatCaHD.filter((h) => quyCuaNgay(h.ng) === k)
+    const chieu = (l: 'ban' | 'mua'): DoiSoatChieu => {
+      const ds = dsQuy.filter((h) => h.l === l)
+      const hd = ds.reduce((s, h) => s + h.v, 0)
+      const tk = pb ? ((l === 'ban' ? pb.ct34 : pb.ct23) ?? null) : null
+      return { tk, hd, n: ds.length, lech: tk === null || !ds.length ? null : hd - tk, thangCo: thangQuy.filter((t) => (kho.phuSong?.[mst]?.[l] ?? []).includes(t)) }
+    }
+    // Đối tác: phần chịu thuế 8% trên hoá đơn so với phụ lục (phụ lục chỉ kê hàng 8%)
+    const doiTac: DongDoiSoatDT[] = []
+    for (const l of ['ban', 'mua'] as const) {
+      const pl = l === 'ban' ? pb?.plBan : pb?.plMua
+      const ds = dsQuy.filter((h) => h.l === l)
+      if (!pl?.length || !ds.length) continue
+      const nhom = new Map<string, DongDoiSoatDT>()
+      const lay = (key: string, ten: string, m: string) => {
+        const g = nhom.get(key) ?? { l, ten, mst: m, hd: 0, pl: 0, lech: 0, hoaDon: [] }
+        if (!g.mst && m) g.mst = m
+        nhom.set(key, g)
+        return g
+      }
+      for (const h of ds) {
+        const m = (l === 'ban' ? h.mm : h.mb) ?? ''
+        const g = lay(khoaDT(h.ten, m), h.ten, m)
+        g.hd += tachThueSuat(h.v, h.t).v8
+        g.hoaDon.push({ kh: h.kh, so: h.so, ng: h.ng, v: h.v, t: h.t, tt: h.tt })
+      }
+      for (const d of pl) lay(khoaDT(d.ten), d.ten, '').pl += d.giaTri
+      for (const g of nhom.values()) {
+        g.lech = g.hd - g.pl
+        if (Math.abs(g.lech) > 1000) doiTac.push(g)
+      }
+    }
+    kq.push({ khoa: k, ban: chieu('ban'), mua: chieu('mua'), doiTac: doiTac.sort((a, b) => Math.abs(b.lech) - Math.abs(a.lech)) })
+  }
+  return kq
 }

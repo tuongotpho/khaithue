@@ -1,8 +1,8 @@
 // Đi một vòng thật trên máy giả lập: đăng nhập -> lưu tờ khai + file Excel -> tải về -> dựng lại sổ
 import { describe, expect, it } from 'vitest'
-import { signInAnonymously } from 'firebase/auth'
+import { signInAnonymously, signOut } from 'firebase/auth'
 import { auth } from '../src/may/firebase'
-import { datCoTraVe, luuChungTu, luuCongTy, luuDaXuat, luuTepHoaDon, luuToKhai, taiDuLieuMay, taiTep } from '../src/may/dongBo'
+import { datCoTraVe, luuChungTu, xoaCongTyTrenMay, xoaTaiLieu, luuCongTy, luuDaXuat, luuTepHoaDon, luuToKhai, taiDuLieuMay, taiTep } from '../src/may/dongBo'
 import { docTaiLieu } from '../src/core/taiLieu'
 import { tinhTongQuan } from '../src/core/tongQuan'
 import { docToKhai } from '../src/core/docToKhai'
@@ -54,5 +54,29 @@ describe('Đồng bộ hồ sơ lên mây (máy giả lập)', () => {
     expect(q2.hoaDon?.ban).toEqual({ n: 1, v: 100_000_000, t: 8_000_000 })
     expect(kho.congTy['0100000000'].hoSo.nguoiKy).toBe('Người ký sửa tay')
     expect(dauKy(kho, '0100000000', { quy: 2, nam: 2026 }).ct22).toBe(0)
+  })
+
+  it('xoá 1 file và xoá toàn bộ công ty: sạch trên mây, không đụng công ty khác', async () => {
+    await signOut(auth) // tài khoản mới, không dính dữ liệu của test trước
+    const { user } = await signInAnonymously(auth)
+    const uid = user.uid
+    const x1 = xml('1/2026', 500)
+    await luuCongTy(uid, { hoSo: docToKhai(x1).hoSo, kyNguon: '', suaTay: false }) // app luôn lưu công ty trước
+    const id = await luuToKhai(uid, docToKhai(x1), x1, 'q1.xml')
+    await luuTepHoaDon(uid, '0100000000', 'a.xlsx', new TextEncoder().encode('a').buffer as ArrayBuffer, { quy: 1, nam: 2026 }, 1, 0)
+    await luuCongTy(uid, { hoSo: { ...docToKhai(x1).hoSo, mst: '0900000009', tenNNT: 'Cty khác' }, kyNguon: '', suaTay: true })
+
+    let may = await taiDuLieuMay(uid)
+    const tk = may.toKhai.find((t) => t.id === id)!
+    await xoaTaiLieu(uid, '0100000000', 'toKhai', id, tk.duongDan)
+    may = await taiDuLieuMay(uid)
+    expect(may.toKhai).toEqual([])
+    await expect(taiTep(tk.duongDan)).rejects.toBeTruthy() // file gốc cũng đã xoá
+
+    const n = await xoaCongTyTrenMay(uid, '0100000000')
+    expect(n).toBe(1) // còn 1 file hoá đơn
+    may = await taiDuLieuMay(uid)
+    expect(may.congTy.map((c) => c.hoSo.mst)).toEqual(['0900000009'])
+    expect(may.tepHoaDon['0100000000']).toBeUndefined()
   })
 })

@@ -24,5 +24,6 @@ export default defineConfig({
   base: './',
   preview: { headers },
   // Test thường chỉ trong src/. Test cần máy giả lập Firebase (firebase-tests/) chạy riêng: npm run test:quyen
-  test: { include: ['src/**/*.test.ts'] },
+  // Bài đối chiếu hồ sơ thật đọc vài trăm file trong OneDrive: cho dư thời gian
+  test: { include: ['src/**/*.test.ts'], testTimeout: 30000 },
 })

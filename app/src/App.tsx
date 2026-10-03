@@ -6,14 +6,14 @@ import { tinhTNCN, NHAP_TNCN_TRONG, type NhapTNCN } from './core/tncn'
 import { docToKhai } from './core/docToKhai'
 import { tenFileXML, xmlGTGT, xmlTNCN } from './core/xml'
 import { denNgay, hanNop, ngayISO, quyCanKhai, tuNgay } from './core/ky'
-import { dauKy, datKhongChapNhan, ghiAppXuat, ghiPhuSong, gopTuMay, kyTruoc, napHoaDon, napTaiLieu, napToKhai, rutGonHoaDon, suaHoSo, tncnGanNhat, type Kho } from './core/kho'
+import { boCongTy, dauKy, datKhongChapNhan, ghiAppXuat, ghiPhuSong, gopTuMay, kyTruoc, napHoaDon, napTaiLieu, napToKhai, rutGonHoaDon, suaHoSo, tncnGanNhat, type Kho } from './core/kho'
 import { docTaiLieu } from './core/taiLieu'
-import { tinhDoiTac, tinhTongQuan } from './core/tongQuan'
+import { tinhDoiSoat, tinhDoiTac, tinhTongQuan } from './core/tongQuan'
 import { NapHangLoat, TongQuanDN } from './ui/TongQuan'
 import type { ToKhaiDaNop } from './core/docToKhai'
 import { coMay } from './may/firebase'
 import { dangNhap, dangXuat, useNguoiDung } from './may/useMay'
-import { boSungHoaDonTep, boSungPhuLuc, datCoTraVe, luuChungTu, luuCongTy, luuDaXuat, luuTepHoaDon, luuToKhai, taiDuLieuMay, taiTep, type DuLieuMay } from './may/dongBo'
+import { boSungHoaDonTep, boSungPhuLuc, datCoTraVe, xoaCongTyTrenMay, xoaTaiLieu, type NhomTaiLieu, luuChungTu, luuCongTy, luuDaXuat, luuTepHoaDon, luuToKhai, taiDuLieuMay, taiTep, type DuLieuMay } from './may/dongBo'
 import { KhoHoSo } from './ui/KhoHoSo'
 import { NHAN_GTGT, NHAN_TNCN, tien } from './core/nhan'
 import type { CanhBao, HoSoDN, KyKeKhai, LoaiHD } from './core/types'
@@ -441,6 +441,62 @@ export default function App() {
     }
   }
 
+  // ---------------- Quản lý dữ liệu: làm mới / xoá ----------------
+
+  /** Bỏ bản sao trên máy của công ty đang chọn rồi tải lại từ mây (không xoá gì trên mây) */
+  async function lamMoiTuMay() {
+    if (!user || !mst) return
+    setTrangThaiMay('Đang làm mới dữ liệu từ mây…')
+    capNhatKho((k) => boCongTy(k, mst))
+    try {
+      await lamMoiMay(user.uid)
+      setTrangThaiMay('☁️ Đã làm mới dữ liệu từ mây.')
+    } catch (e) {
+      setTrangThaiMay(`⚠️ ${(e as Error).message}`)
+    }
+  }
+
+  /** Xoá vĩnh viễn 1 file trên mây (hỏi xác nhận) rồi dựng lại số liệu */
+  async function xoaMotTaiLieu(nhom: NhomTaiLieu, id: string, duongDan: string, ten: string) {
+    if (!user || !mst) return
+    if (!window.confirm(`Xoá vĩnh viễn "${ten}" trên mây?\n\nKhông hoàn tác được. Muốn có lại thì phải nạp lại file.`)) return
+    try {
+      setTrangThaiMay(`Đang xoá ${ten}…`)
+      await xoaTaiLieu(user.uid, mst, nhom, id, duongDan)
+      await lamMoiTuMay()
+      setTrangThaiMay(`🗑 Đã xoá ${ten}.`)
+    } catch (e) {
+      setTrangThaiMay(`⚠️ Chưa xoá được: ${(e as Error).message}`)
+    }
+  }
+
+  /** Xoá TOÀN BỘ hồ sơ công ty đang chọn (trên mây nếu đăng nhập, và trên máy). Phải gõ đúng MST. */
+  async function xoaToanBoCongTy() {
+    if (!mst || !hoSo) return
+    const go = window.prompt(
+      `XOÁ TOÀN BỘ hồ sơ của ${hoSo.tenNNT} ${user ? 'trên mây và trên máy này' : 'trên máy này'}?\n` +
+        'Gồm: tờ khai, chứng từ, file hoá đơn, file đã xuất, thông tin công ty. KHÔNG HOÀN TÁC ĐƯỢC.\n\n' +
+        `Gõ đúng mã số thuế ${hoSo.mst} để xác nhận:`,
+    )
+    if (go === null) return
+    if (go.trim() !== hoSo.mst) {
+      window.alert('Mã số thuế không khớp — chưa xoá gì.')
+      return
+    }
+    try {
+      if (user) {
+        const n = await xoaCongTyTrenMay(user.uid, mst, (x, t) => setTrangThaiMay(`Đang xoá trên mây ${x}/${t}…`))
+        setTrangThaiMay(`🗑 Đã xoá ${n} tài liệu của ${hoSo.tenNNT} trên mây.`)
+      }
+      xoaHoaDon()
+      capNhatKho((k) => boCongTy(k, mst, false))
+      if (user) setMay(await taiDuLieuMay(user.uid))
+      if (!user) setTrangThaiMay(`🗑 Đã xoá dữ liệu của ${hoSo.tenNNT} trên máy này.`)
+    } catch (e) {
+      setTrangThaiMay(`⚠️ Xoá chưa xong: ${(e as Error).message}. Bấm xoá lại để tiếp tục.`)
+    }
+  }
+
   function luuHoSoTay(h: HoSoDN) {
     const k = suaHoSo(kho, h)
     setKho(k)
@@ -480,6 +536,7 @@ export default function App() {
   )
   const tncn = tinhTNCN(nhapTNCN)
   const tq = useMemo(() => (mst ? tinhTongQuan(kho, mst) : null), [kho, mst])
+  const doiSoat = useMemo(() => (mst ? tinhDoiSoat(kho, mst) : []), [kho, mst])
   const layDoiTac = useCallback((nam: number | null) => tinhDoiTac(kho, mst ?? '', nam), [kho, mst])
   const ct = gtgt.toKhai.ct
 
@@ -568,7 +625,7 @@ export default function App() {
             <NapHangLoat onFiles={(f) => void napHangLoat(f)} tienDo={tienDo} />
             {ketQuaNap && <p className="text-sm text-emerald-800">{ketQuaNap}</p>}
             {!user && coMay && <p className="text-sm text-slate-500">Mẹo: đăng nhập Google (trên cùng) trước khi nạp để hồ sơ được lưu lên mây, mở ở máy khác cũng thấy.</p>}
-            {tq && hoSo ? <TongQuanDN tq={tq} tenCty={hoSo.tenNNT} onMoQuy={moQuyKeKhai} layDoiTac={layDoiTac} /> : <p className="text-slate-500">Nạp hồ sơ để xem tổng quan.</p>}
+            {tq && hoSo ? <TongQuanDN tq={tq} tenCty={hoSo.tenNNT} onMoQuy={moQuyKeKhai} layDoiTac={layDoiTac} doiSoat={doiSoat} /> : <p className="text-slate-500">Nạp hồ sơ để xem tổng quan.</p>}
           </section>
         )}
 
@@ -588,10 +645,25 @@ export default function App() {
                 <div>
                   <h3 className="mb-1 font-semibold">☁️ File đã lưu trên mây, theo quý</h3>
                   {user && may && mst ? (
-                    <KhoHoSo may={may} mst={mst} onMoLai={moLaiQuy} />
+                    <KhoHoSo may={may} mst={mst} onMoLai={moLaiQuy} onXoa={(n, id, d, t) => void xoaMotTaiLieu(n, id, d, t)} />
                   ) : (
                     <p className="text-sm text-slate-500">{coMay ? 'Đăng nhập Google (trên cùng) để xem và tải lại file đã lưu trên mây.' : 'Mở bản web để dùng kho trên mây.'}</p>
                   )}
+                </div>
+                <div className="rounded-xl border border-red-200 bg-red-50/40 p-3">
+                  <h3 className="font-semibold">⚙️ Quản lý dữ liệu</h3>
+                  <p className="mt-1 text-sm text-slate-600">Nạp nhầm một file thì bấm “xoá” cạnh file đó ở danh sách trên. Muốn làm lại từ đầu thì dùng các nút dưới.</p>
+                  <div className="mt-2 flex flex-wrap gap-3">
+                    {user && (
+                      <button className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm hover:bg-slate-50" onClick={() => void lamMoiTuMay()}>
+                        🔄 Làm mới từ mây <span className="text-slate-500">(không xoá gì, chỉ tải lại)</span>
+                      </button>
+                    )}
+                    <button className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700" onClick={() => void xoaToanBoCongTy()}>
+                      🗑 Xoá toàn bộ hồ sơ công ty này{user ? ' (cả trên mây)' : ' trên máy này'}
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">Xoá toàn bộ phải gõ đúng mã số thuế để xác nhận, và không hoàn tác được. Sau khi xoá, nạp lại thư mục hồ sơ ở tab 📊 Tổng quan.</p>
                 </div>
               </>
             )}

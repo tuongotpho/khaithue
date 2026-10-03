@@ -102,7 +102,7 @@ describe.skipIf(!coDuLieu)('Đối chiếu với tờ khai 01/GTGT đã nộp', 
 
 import { docTaiLieu } from './taiLieu'
 import { ghiPhuSong, napHoaDon, napTaiLieu } from './kho'
-import { tinhDoiTac, tinhTongQuan } from './tongQuan'
+import { tinhDoiSoat, tinhDoiTac, tinhTongQuan } from './tongQuan'
 
 interface CaTongQuan {
   homNay: string
@@ -110,6 +110,7 @@ interface CaTongQuan {
   daNopBangPhaiNop: string[]
   doanhThuKhopHoaDon: string[]
   lechDoanhThu: Record<string, number>
+  doiSoatDoiTac?: { ky: string; l: 'ban' | 'mua'; lech: number[]; coHoaDonSo?: string[]; tenChua?: string }[]
 }
 const caTQ = (cfg as unknown as { tongQuan?: CaTongQuan } | null)?.tongQuan
 
@@ -159,6 +160,20 @@ describe.skipIf(!coDuLieu || !caTQ)('Tổng quan dựng từ toàn bộ hồ sơ
       expect(dt.tongMua, `mua vào ${n.nam}`).toBe(quyNam.reduce((s, x) => s + x.hoaDon!.mua.v, 0))
       expect(dt.ban.reduce((s, d) => s + d.n, 0), `số HĐ bán ${n.nam}`).toBe(quyNam.reduce((s, x) => s + x.hoaDon!.ban.n, 0))
     }
+    // Đối soát: tự chỉ ra đúng các chỗ lệch đã biết, tới từng đối tác và hoá đơn
+    const ds = tinhDoiSoat(kho, cfg!.mst)
+    for (const c of caTQ!.doiSoatDoiTac ?? []) {
+      const q = ds.find((x) => x.khoa === c.ky)!
+      const dt = q.doiTac.filter((x) => x.l === c.l)
+      expect(dt.map((x) => x.lech), `${c.ky} ${c.l}`).toEqual(c.lech)
+      if (c.coHoaDonSo) expect(dt[0].hoaDon.map((h) => h.so)).toEqual(expect.arrayContaining(c.coHoaDonSo))
+      if (c.tenChua) expect(dt[0].ten.toUpperCase()).toContain(c.tenChua)
+    }
+    // ngoài các chỗ đã biết: không đối tác nào lệch
+    const daBiet = new Set((caTQ!.doiSoatDoiTac ?? []).map((c) => `${c.ky}|${c.l}`))
+    const lechKhac = ds.flatMap((q) => q.doiTac.filter((x) => !daBiet.has(`${q.khoa}|${x.l}`)).map((x) => `${q.khoa} ${x.l} ${x.ten} ${x.lech}`))
+    expect(lechKhac, 'đối tác lệch MỚI chưa giải thích').toEqual([])
+
     const tatCa = tinhDoiTac(kho, cfg!.mst, null)
     console.log('Khách hàng (tất cả năm):', tatCa.ban.map((d) => `${d.ten.slice(0, 40)} | ${d.mst || '-'} | ${d.n} HĐ | ${(d.tyTrong * 100).toFixed(1)}%`))
     console.log('Nhà cung cấp lớn nhất:', tatCa.mua.slice(0, 5).map((d) => `${d.ten.slice(0, 40)} | ${d.n} HĐ | ${(d.tyTrong * 100).toFixed(1)}%`), 'tổng NCC:', tatCa.mua.length)

@@ -53,6 +53,10 @@ export interface TepHoaDon {
   /** Kỳ tải về ghi trên đầu file: "Từ ngày tu đến ngày den" (dd/MM/yyyy) */
   tu?: string
   den?: string
+  /** Số dòng lệch cột đã tự sửa (file ghép tay từ nhiều lần tải) */
+  suaLechCot?: number
+  /** Số dòng bị bỏ vì số tiền vô lý (không tự sửa được) */
+  boDong?: number
 }
 
 /** Đọc một sheet "DANH SÁCH HÓA ĐƠN". Không phải danh sách hoá đơn thì trả null. */
@@ -81,9 +85,29 @@ export function docTep(rows: O[][], tenFile: string): TepHoaDon | null {
   // (bản tải về năm 2026 có cả hai cột nên gợi ý = null, phải dựa vào MST)
   const goiY: LoaiHD | null = c.dcMua >= 0 && c.dcBan < 0 ? 'ban' : c.dcBan >= 0 && c.dcMua < 0 ? 'mua' : null
 
+  // Ô chứa MST (chuỗi 10/13 chữ số) — nếu nằm ở cột tiền thì dòng đó bị lệch cột
+  const laMST = (v: O) => typeof v === 'string' && /^\d{10}(\d{3})?$/.test(v.trim())
+  const laTien = (v: O) => typeof v === 'number' || (typeof v === 'string' && /^-?[\d.,]+$/.test(v.trim()) && !laMST(v))
+  let suaLechCot = 0
+  let boDong = 0
+
   const hoaDon: HoaDon[] = []
   for (const r of rows.slice(iTieuDe + 1)) {
     if (!r || (typeof r[0] !== 'number' && !/^\d+$/.test(chuan(r[0])))) continue
+    // File GHÉP TAY từ nhiều lần tải: dòng dán từ bản tải có thêm cột "MST người mua" chèn ngay trước cột tiền
+    // -> ô "Tổng tiền chưa thuế" lại chứa MST. Tự đọc lùi một cột cho các cột từ đó trở đi.
+    const d = c.chuaThue >= 0 && laMST(r[c.chuaThue]) && laTien(r[c.chuaThue + 1]) ? 1 : 0
+    const at = (i: number) => (i >= 0 && d && i >= c.chuaThue ? i + d : i)
+    // Trạng thái: bản tải khác nhau thêm/bớt cột khác nhau -> tìm ô "Hóa đơn ..." quanh vị trí dự kiến
+    const trangThai = d && c.tt >= 0 ? ([c.tt, c.tt + 1, c.tt - 1].map((i) => o(r, i)).find((x) => /^hóa đơn/i.test(x)) ?? o(r, c.tt)) : o(r, c.tt)
+    const chuaThue = soTien(r[at(c.chuaThue)])
+    const thue = soTien(r[at(c.thue)])
+    // Lưới an toàn: tiền là MST, hoặc thuế > 10,5% giá trị -> không phải dòng hoá đơn hợp lệ, bỏ và báo
+    if (laMST(r[at(c.chuaThue)]) || (chuaThue > 0 && thue > chuaThue * 0.105 + 10)) {
+      boDong++
+      continue
+    }
+    if (d) suaLechCot++
     hoaDon.push({
       loai: 'ban',
       kyHieuMau: o(r, c.mau),
@@ -93,12 +117,12 @@ export function docTep(rows: O[][], tenFile: string): TepHoaDon | null {
       mstBan: mst(r[c.mstBan]),
       tenBan: o(r, c.tenBan),
       dchiBan: o(r, c.dcBan),
-      mstMua: c.mstMua >= 0 ? mst(r[c.mstMua]) : '',
-      tenMua: o(r, c.tenMua),
-      dchiMua: o(r, c.dcMua),
-      chuaThue: soTien(r[c.chuaThue]),
-      thue: soTien(r[c.thue]),
-      trangThai: o(r, c.tt),
+      mstMua: c.mstMua >= 0 ? mst(r[at(c.mstMua)]) : d ? mst(r[c.chuaThue]) : '',
+      tenMua: o(r, at(c.tenMua)),
+      dchiMua: o(r, at(c.dcMua)),
+      chuaThue,
+      thue,
+      trangThai,
       file: tenFile,
     })
   }
@@ -113,7 +137,7 @@ export function docTep(rows: O[][], tenFile: string): TepHoaDon | null {
       break
     }
   }
-  return { ten: tenFile, hoaDon, goiY, tu, den }
+  return { ten: tenFile, hoaDon, goiY, tu, den, ...(suaLechCot ? { suaLechCot } : {}), ...(boDong ? { boDong } : {}) }
 }
 
 export interface KetQuaPhanLoai {
@@ -212,6 +236,8 @@ export function phanLoai(teps: TepHoaDon[], mstBiet?: string | null, epBuoc: Rec
       if (!dchiCongTy) dchiCongTy = (loai === 'ban' ? h.dchiBan : h.dchiMua) ?? ''
     }
     theoTep[t.ten] = dem
+    if (t.suaLechCot) canhBao.push({ muc: 'chu_y', noiDung: `${t.ten}: ${t.suaLechCot} dòng bị lệch cột (file ghép từ nhiều lần tải) — app đã tự đọc lại đúng cột. Nên mở file kiểm tra.` })
+    if (t.boDong) canhBao.push({ muc: 'loi', noiDung: `${t.ten}: bỏ ${t.boDong} dòng có số tiền vô lý (nghi lệch cột không tự sửa được). Mở file kiểm tra các dòng đó.` })
     if (dem.khac) canhBao.push({ muc: 'chu_y', noiDung: `${t.ten}: ${dem.khac} hoá đơn không có MST ${mstCty ?? 'công ty'} ở bên bán lẫn bên mua — đã bỏ ra. Có tải nhầm file đơn vị khác không?` })
   }
   return { mst: mstCty, tenCongTy, dchiCongTy, hoaDon, theoTep, canhBao }

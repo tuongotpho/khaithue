@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { tenKy } from '../core/kho'
 import { tien } from '../core/nhan'
-import { taiTep, type DuLieuMay } from '../may/dongBo'
+import { taiTep, type DuLieuMay, type NhomTaiLieu } from '../may/dongBo'
+import { kyCuaChungTu } from '../core/taiLieu'
 
 function taiVeMay(ten: string, du: ArrayBuffer) {
   const url = URL.createObjectURL(new Blob([du]))
@@ -13,13 +14,23 @@ function taiVeMay(ten: string, du: ArrayBuffer) {
 }
 
 /** Kho hồ sơ trên mây của một công ty, xếp theo quý */
-export function KhoHoSo({ may, mst, onMoLai }: { may: DuLieuMay; mst: string; onMoLai: (khoa: string, tep: { ten: string; du: ArrayBuffer }[]) => void }) {
+export function KhoHoSo({ may, mst, onMoLai, onXoa }: {
+  may: DuLieuMay
+  mst: string
+  onMoLai: (khoa: string, tep: { ten: string; du: ArrayBuffer }[]) => void
+  /** Xoá vĩnh viễn 1 tài liệu trên mây (đã hỏi xác nhận) */
+  onXoa: (nhom: NhomTaiLieu, id: string, duongDan: string, ten: string) => void
+}) {
   const [ban, setBan] = useState('')
   const [loi, setLoi] = useState('')
   const toKhai = may.toKhai.filter((t) => t.mst === mst)
   const hoaDon = may.tepHoaDon[mst] ?? []
   const daXuat = may.daXuat[mst] ?? []
-  const cacKy = [...new Set([...toKhai.map((t) => t.ky), ...hoaDon.map((h) => h.ky), ...daXuat.map((d) => d.ky)])].filter(Boolean).sort().reverse()
+  const chungTu = may.chungTu.filter((c) => c.mst === mst).map((c) => ({ ...c, ky: kyCuaChungTu(c.dong[0]?.kyThue ?? '') }))
+  const cacKy = [...new Set([...toKhai.map((t) => t.ky), ...hoaDon.map((h) => h.ky), ...daXuat.map((d) => d.ky), ...chungTu.map((c) => c.ky)])].filter(Boolean).sort().reverse()
+  const nutXoa = (nhom: NhomTaiLieu, id: string, duongDan: string, ten: string) => (
+    <button className="ml-2 text-xs text-red-600 underline" disabled={!!ban} onClick={() => onXoa(nhom, id, duongDan, ten)}>xoá</button>
+  )
   if (!cacKy.length) return <p className="text-sm text-slate-500">Chưa có hồ sơ nào trên mây cho công ty này. Kéo file vào bước 1 là app tự lưu.</p>
 
   async function tai(ten: string, duongDan: string) {
@@ -54,6 +65,7 @@ export function KhoHoSo({ may, mst, onMoLai }: { may: DuLieuMay; mst: string; on
         const tk = toKhai.filter((t) => t.ky === khoa).sort((a, b) => a.maTKhai.localeCompare(b.maTKhai) || a.soLan - b.soLan)
         const hd = hoaDon.filter((h) => h.ky === khoa)
         const xu = daXuat.filter((d) => d.ky === khoa)
+        const ct = chungTu.filter((c) => c.ky === khoa)
         return (
           <div key={khoa} className="rounded-xl border border-slate-200 p-3">
             <div className="flex flex-wrap items-center gap-3">
@@ -71,18 +83,28 @@ export function KhoHoSo({ may, mst, onMoLai }: { may: DuLieuMay; mst: string; on
                   {t.maTKhai === '842' && <> — [40] {tien(t.ct.ct40 ?? 0)} · [43] {tien(t.ct.ct43 ?? 0)}</>}
                   {t.khongChapNhan && ' (CQT trả về)'}{' '}
                   <button className="text-emerald-700 underline" disabled={!!ban} onClick={() => tai(t.tenFile, t.duongDan)}>tải XML</button>
+                  {nutXoa('toKhai', t.id, t.duongDan, t.tenFile)}
                 </li>
               ))}
               {hd.map((h) => (
                 <li key={h.id}>
                   📊 {h.ten} — {[h.soBan && `bán ${h.soBan}`, h.soMua && `mua ${h.soMua}`].filter(Boolean).join(', ')} HĐ{' '}
                   <button className="text-emerald-700 underline" disabled={!!ban} onClick={() => tai(h.ten, h.duongDan)}>tải</button>
+                  {nutXoa('tepHoaDon', h.id, h.duongDan, h.ten)}
                 </li>
               ))}
               {xu.map((x) => (
                 <li key={x.id} className="text-slate-600">
                   ⬆ App đã xuất: {x.tenFile}{x.ct40 !== null && <> — [40] {tien(x.ct40)}</>}{' '}
                   <button className="text-emerald-700 underline" disabled={!!ban} onClick={() => tai(x.tenFile, x.duongDan)}>tải</button>
+                  {nutXoa('daXuat', x.id, x.duongDan, x.tenFile)}
+                </li>
+              ))}
+              {ct.map((c) => (
+                <li key={c.id}>
+                  🧾 Chứng từ nộp tiền số {c.so} ngày {c.ngay}: {tien(c.tong)} đ{' '}
+                  <button className="text-emerald-700 underline" disabled={!!ban} onClick={() => tai(c.tenFile || `chung-tu-${c.so}.xml`, c.duongDan)}>tải</button>
+                  {nutXoa('chungTu', c.id, c.duongDan, `chứng từ số ${c.so}`)}
                 </li>
               ))}
             </ul>

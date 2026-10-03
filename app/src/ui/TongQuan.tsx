@@ -1,8 +1,8 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useMemo, useRef, useState, type ReactNode } from 'react'
 import { tenKy } from '../core/kho'
 import { tien } from '../core/nhan'
 import { tenTieuMuc } from '../core/taiLieu'
-import type { DoiTac, DongDoiTac, DongQuy, NguonQuy, TongQuan as TQ } from '../core/tongQuan'
+import type { DoiSoatChieu, DoiSoatQuy, DoiTac, DongDoiTac, DongQuy, NguonQuy, TongQuan as TQ } from '../core/tongQuan'
 import { DanhSachCanhBao } from './chung'
 
 const trieu = (n: number) => (Math.abs(n) >= 1e9 ? `${(n / 1e9).toLocaleString('vi-VN', { maximumFractionDigits: 2 })} tỷ` : `${Math.round(n / 1e6).toLocaleString('vi-VN')} tr`)
@@ -292,13 +292,112 @@ function BangDoiTac({ ds, tong, loai, nguonQuy }: { ds: DongDoiTac[]; tong: numb
   )
 }
 
-const CAC_PHAN = ['soLieu', 'bieuDo', 'canXuLy', 'theoQuy', 'khachHang', 'nhaCungCap', 'chungTu', 'khac']
 
-export function TongQuanDN({ tq, tenCty, onMoQuy, layDoiTac }: {
+// ---------- Đối soát tờ khai ↔ hoá đơn ----------
+
+function OLech({ c }: { c: DoiSoatChieu }) {
+  if (c.tk === null && !c.n) return <span className="text-slate-400">—</span>
+  if (c.lech === null) return <span className="text-slate-400">{c.tk === null ? 'chưa có tờ khai' : 'chưa có hoá đơn'}</span>
+  if (Math.abs(c.lech) <= 1000) return <span className="text-emerald-700">✅ khớp</span>
+  return <b className="text-amber-800">⚠️ {c.lech > 0 ? '+' : ''}{tien(c.lech)}</b>
+}
+
+function DoiSoat({ ds }: { ds: DoiSoatQuy[] }) {
+  const [mo, setMo] = useState<string | null>(null)
+  if (!ds.length) return <p className="text-sm text-slate-500">Chưa có dữ liệu để đối soát.</p>
+  const thang = (ts: string[]) => (ts.length ? ts.map((t) => Number(t.slice(5))).join(', ') : '—')
+  return (
+    <div>
+      <p className="mb-2 text-sm text-slate-600">
+        So tờ khai 01/GTGT với hoá đơn đã nạp. <b>Lệch không có nghĩa là sai</b>: có thể do thiếu file của một tháng, hoá đơn thuế suất khác 8%, hoá đơn ngoài quý, hoặc tờ khai đã khai bổ sung. Bấm “Xem” để thấy lệch ở đối tác nào, hoá đơn nào.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-left text-slate-500">
+            <tr>
+              <th className="p-2">Quý</th>
+              <th className="p-2 text-right">Bán ra: tờ khai [34]</th>
+              <th className="p-2 text-right">Hoá đơn</th>
+              <th className="p-2">Bán ra</th>
+              <th className="p-2 text-right">Mua vào: tờ khai [23]</th>
+              <th className="p-2 text-right">Hoá đơn</th>
+              <th className="p-2">Mua vào</th>
+              <th className="p-2">Tháng đã có danh sách (bán / mua)</th>
+              <th className="p-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {ds.map((q) => (
+              <Fragment key={q.khoa}>
+                <tr className="border-t border-slate-100">
+                  <td className="p-2 font-medium">{tenKy(q.khoa)}</td>
+                  <td className="p-2 text-right tabular-nums">{q.ban.tk !== null ? tien(q.ban.tk) : '—'}</td>
+                  <td className="p-2 text-right tabular-nums">{q.ban.n ? `${tien(q.ban.hd)} (${q.ban.n})` : '—'}</td>
+                  <td className="p-2"><OLech c={q.ban} /></td>
+                  <td className="p-2 text-right tabular-nums">{q.mua.tk !== null ? tien(q.mua.tk) : '—'}</td>
+                  <td className="p-2 text-right tabular-nums">{q.mua.n ? `${tien(q.mua.hd)} (${q.mua.n})` : '—'}</td>
+                  <td className="p-2"><OLech c={q.mua} /></td>
+                  <td className="p-2 text-slate-600">{thang(q.ban.thangCo)} / {thang(q.mua.thangCo)}</td>
+                  <td className="p-2">
+                    {q.doiTac.length > 0 && (
+                      <button className="text-emerald-700 underline" onClick={() => setMo(mo === q.khoa ? null : q.khoa)}>
+                        {mo === q.khoa ? 'Ẩn' : `Xem ${q.doiTac.length} đối tác lệch`}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+                {mo === q.khoa && (
+                  <tr>
+                    <td colSpan={9} className="bg-slate-50 p-2">
+                      <div className="text-xs text-slate-500">So phần chịu thuế 8% trên hoá đơn với phụ lục tờ khai (phụ lục chỉ kê hàng 8%).</div>
+                      <table className="mt-1 w-full text-sm">
+                        <thead className="text-left text-slate-500">
+                          <tr>
+                            <th className="p-1">Chiều</th>
+                            <th className="p-1">Đối tác</th>
+                            <th className="p-1 text-right">Hoá đơn (8%)</th>
+                            <th className="p-1 text-right">Phụ lục</th>
+                            <th className="p-1 text-right">Lệch</th>
+                            <th className="p-1">Các hoá đơn của đối tác trong quý</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {q.doiTac.map((d, i) => (
+                            <tr key={i} className="border-t border-slate-200 align-top">
+                              <td className="p-1">{d.l === 'ban' ? 'Bán ra' : 'Mua vào'}</td>
+                              <td className="p-1">{d.ten}{d.mst && <span className="text-slate-400"> ({d.mst})</span>}</td>
+                              <td className="p-1 text-right tabular-nums">{tien(d.hd)}</td>
+                              <td className="p-1 text-right tabular-nums">{tien(d.pl)}</td>
+                              <td className="p-1 text-right font-semibold tabular-nums text-amber-800">{d.lech > 0 ? '+' : ''}{tien(d.lech)}</td>
+                              <td className="p-1 text-xs text-slate-600">
+                                {d.hoaDon.length
+                                  ? d.hoaDon.map((h) => `${h.kh}-${h.so} (${h.ng}) ${tien(h.v)}${/thay thế|điều chỉnh/i.test(h.tt) ? ` [${h.tt}]` : ''}`).join('; ')
+                                  : 'không có hoá đơn nào — chỉ có trên phụ lục'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+const CAC_PHAN = ['soLieu', 'bieuDo', 'canXuLy', 'theoQuy', 'doiSoat', 'khachHang', 'nhaCungCap', 'chungTu', 'khac']
+
+export function TongQuanDN({ tq, tenCty, onMoQuy, layDoiTac, doiSoat }: {
   tq: TQ
   tenCty: string
   onMoQuy: (khoa: string) => void
   layDoiTac: (nam: number | null) => DoiTac
+  doiSoat: DoiSoatQuy[]
 }) {
   const cacNam = tq.nam.map((n) => n.nam)
   const [nam, setNam] = useState<number | null>(null)
@@ -417,6 +516,16 @@ export function TongQuanDN({ tq, tenCty, onMoQuy, layDoiTac }: {
           </table>
         </div>
         <p className="mt-1 text-xs text-slate-500">Số liệu lấy theo bản tờ khai đang có hiệu lực (bổ sung mới nhất, không có thì bản lần đầu). Bản bị cơ quan thuế trả về không tính.</p>
+      </PhanThuGon>
+
+      <PhanThuGon
+        id="doiSoat"
+        tieuDe="🔍 Đối soát tờ khai ↔ hoá đơn"
+        phu={`${doiSoat.filter((q) => [q.ban, q.mua].some((c) => c.lech !== null && Math.abs(c.lech) > 1000)).length} quý có lệch`}
+        dong={dong}
+        setDong={setDong}
+      >
+        <DoiSoat ds={doiSoat} />
       </PhanThuGon>
 
       <PhanThuGon
