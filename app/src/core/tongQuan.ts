@@ -47,7 +47,8 @@ export interface TongQuan {
   tuQuy: string | null
   khac: ToKhaiKhac[]
   chungTu: ChungTu[]
-  hanToi: { khoa: string; han: string; conNgay: number; daCoToKhai: boolean } | null
+  /** daCoToKhai: đã nạp tờ khai ĐÃ NỘP (file XML); daXuat: app có xuất nhưng chưa thấy bản đã nộp */
+  hanToi: { khoa: string; han: string; conNgay: number; daCoToKhai: boolean; daXuat: boolean } | null
 }
 
 const tuChuoi = (khoa: string): KyKeKhai => {
@@ -145,7 +146,9 @@ export function tinhTongQuan(kho: Kho, mst: string, homNay = new Date()): TongQu
 
   for (const q of quy) {
     const ten = tenKy(q.khoa)
-    if (q.biTraVe) canhBao.push({ muc: 'loi', noiDung: `Quý ${ten}: tờ khai 01/GTGT bị cơ quan thuế trả về, chưa thấy bản được chấp nhận.` })
+    if (q.hieuLuc?.nguon === 'app') {
+      canhBao.push({ muc: q.quaHan ? 'loi' : 'chu_y', noiDung: `Quý ${ten}: mới có bản APP XUẤT ([40] = ${tien(q.hieuLuc.ct40)} đ), chưa thấy tờ khai đã nộp. Nộp xong thì nạp file XML đã nộp vào để xác nhận${q.quaHan ? ` — hạn ${q.hanNop} đã qua` : ''}.` })
+    } else if (q.biTraVe) canhBao.push({ muc: 'loi', noiDung: `Quý ${ten}: tờ khai 01/GTGT bị cơ quan thuế trả về, chưa thấy bản được chấp nhận.` })
     else if (!q.hieuLuc && q.quaHan) canhBao.push({ muc: 'loi', noiDung: `Quý ${ten}: chưa thấy tờ khai 01/GTGT (hạn ${q.hanNop} đã qua). Nạp file tờ khai đã nộp, hoặc nếu chưa nộp thì cần nộp ngay.` })
     if (q.khopDauKy === false) canhBao.push({ muc: 'loi', noiDung: `Quý ${ten}: [22] không bằng [43] tờ khai lần đầu quý trước — cơ quan thuế sẽ không chấp nhận.` })
     if (q.phaiNop && q.phaiNop > 0 && q.coChungTu && q.daNop < q.phaiNop) {
@@ -169,7 +172,7 @@ export function tinhTongQuan(kho: Kho, mst: string, homNay = new Date()): TongQu
   const qHan = quy.find((q) => q.khoa === kHan)
   const hanStr = hanNop(quyCuoi)
   const conNgay = Math.ceil((ngayTu(hanStr).getTime() - new Date(homNay.getFullYear(), homNay.getMonth(), homNay.getDate()).getTime()) / 86400000)
-  const hanToi = { khoa: kHan, han: hanStr, conNgay, daCoToKhai: !!qHan?.hieuLuc }
+  const hanToi = { khoa: kHan, han: hanStr, conNgay, daCoToKhai: qHan?.hieuLuc?.nguon === 'xml', daXuat: qHan?.hieuLuc?.nguon === 'app' }
   if (!hanToi.daCoToKhai && conNgay >= 0) canhBao.unshift({ muc: 'chu_y', noiDung: `Hạn nộp tờ khai quý ${tenKy(kHan)}: ${hanStr} (còn ${conNgay} ngày).` })
 
   return {

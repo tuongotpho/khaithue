@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { docTaiLieu, kyCuaChungTu, kyDangChu, tenTieuMuc } from './taiLieu'
-import { khoTrong, napHoaDon, napTaiLieu, type Kho } from './kho'
+import { ghiAppXuat, khoTrong, napHoaDon, napTaiLieu, type Kho } from './kho'
 import { tinhTongQuan } from './tongQuan'
 import type { HoaDon } from './types'
 
@@ -75,6 +75,14 @@ describe('Tổng quan doanh nghiệp', () => {
     const q = tinhTongQuan(kho, MST, new Date(2025, 9, 3)) // 03/10/2025
     expect(q.hanToi).toMatchObject({ khoa: '2025-Q3', han: '31/10/2025', conNgay: 28, daCoToKhai: false })
     expect(q.canhBao[0].noiDung).toContain('Hạn nộp tờ khai quý 3/2025: 31/10/2025 (còn 28 ngày)')
+  })
+
+  it('bản app xuất KHÔNG được coi là đã nộp', () => {
+    let kho = nap(khoTrong(), tk('2/2025', { ct40: 0, ct43: 0 }))
+    kho = ghiAppXuat(kho, MST, { quy: 3, nam: 2025 }, { ct22: 0, ct36: 0, ct40: 0, ct41: 0, ct43: 0, ct34: 0, ct35: 0, ct23: 0, ct24: 0 })
+    const q = tinhTongQuan(kho, MST, new Date(2025, 9, 3))
+    expect(q.hanToi).toMatchObject({ khoa: '2025-Q3', daCoToKhai: false, daXuat: true })
+    expect(q.canhBao.some((c) => c.noiDung.includes('Quý 3/2025: mới có bản APP XUẤT'))).toBe(true)
   })
 
   it('hoá đơn trùng giữa Excel (bỏ trống MST của mình) và XML: chỉ tính 1 lần', () => {

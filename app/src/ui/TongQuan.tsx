@@ -133,12 +133,8 @@ function BieuDoQuy({ quy }: { quy: DongQuy[] }) {
 function OTrangThai({ q }: { q: DongQuy }) {
   if (q.biTraVe) return <span className="text-red-700">⛔ bị trả về</span>
   if (!q.hieuLuc) return q.quaHan ? <span className="text-red-700">⛔ thiếu</span> : <span className="text-slate-400">chưa đến hạn</span>
-  return (
-    <span className="text-emerald-700">
-      ✅ {q.coBoSung ? 'có bổ sung' : 'lần đầu'}
-      {q.hieuLuc.nguon === 'app' && <span className="text-amber-700"> (app xuất)</span>}
-    </span>
-  )
+  if (q.hieuLuc.nguon === 'app') return <span className="text-amber-700">⚠️ app xuất, chưa thấy bản nộp</span>
+  return <span className="text-emerald-700">✅ {q.coBoSung ? 'có bổ sung' : 'lần đầu'}</span>
 }
 
 export function TongQuanDN({ tq, tenCty, onMoQuy }: { tq: TQ; tenCty: string; onMoQuy: (khoa: string) => void }) {
@@ -157,7 +153,8 @@ export function TongQuanDN({ tq, tenCty, onMoQuy }: { tq: TQ; tenCty: string; on
       <div className="flex flex-wrap items-center gap-3">
         {tq.hanToi && (
           <span className={`rounded-full px-3 py-1 ${tq.hanToi.daCoToKhai ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900'}`}>
-            Quý {tenKy(tq.hanToi.khoa)}: hạn nộp <b>{tq.hanToi.han}</b> {tq.hanToi.daCoToKhai ? '— đã có tờ khai ✅' : tq.hanToi.conNgay >= 0 ? `— còn ${tq.hanToi.conNgay} ngày` : '— ĐÃ QUÁ HẠN'}
+            Quý {tenKy(tq.hanToi.khoa)}: hạn nộp <b>{tq.hanToi.han}</b>{' '}
+            {tq.hanToi.daCoToKhai ? '— đã nộp ✅' : `${tq.hanToi.daXuat ? '— app đã xuất, chưa thấy bản đã nộp ' : ''}${tq.hanToi.conNgay >= 0 ? `— còn ${tq.hanToi.conNgay} ngày` : '— ĐÃ QUÁ HẠN'}`}
           </span>
         )}
         <span className="text-sm text-slate-500">Hồ sơ từ quý {tq.tuQuy ? tenKy(tq.tuQuy) : '—'}</span>
