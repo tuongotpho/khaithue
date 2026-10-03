@@ -894,6 +894,11 @@ export default function App() {
           {user ? 'Hồ sơ được lưu vào tài khoản Google đang đăng nhập — chỉ tài khoản này xem được.' : 'Chưa đăng nhập: mọi dữ liệu chỉ xử lý và lưu trên máy này, không gửi đi đâu.'}
         </p>
       </main>
+
+      <footer className="border-t border-slate-200 px-4 py-5 text-center text-xs text-slate-500">
+        <p>©2026 August87. Bảo lưu mọi quyền.</p>
+        <p className="mt-1">Công cụ hỗ trợ lập tờ khai — kiểm tra lại số liệu trước khi nộp lên cơ quan thuế.</p>
+      </footer>
     </div>
   )
 }
