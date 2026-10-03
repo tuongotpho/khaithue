@@ -4,9 +4,19 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { viteSingleFile } from 'vite-plugin-singlefile'
 
-// Header bảo mật lấy đúng từ vercel.json -> `npm run preview` chạy y như trên Vercel
-const vercel = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'))
-const headers: Record<string, string> = Object.fromEntries(vercel.headers[0].headers.map((h: { key: string; value: string }) => [h.key, h.value]))
+// Header bảo mật lấy từ vercel.json để `npm run preview` trên máy chạy y như trên Vercel.
+// CHỈ dùng cho xem trước trên máy: lúc build trên Vercel, file vercel.json bị Vercel xử lý lại
+// (không còn "headers") -> đọc không được thì bỏ qua, không được làm hỏng build.
+function docHeaderVercel(): Record<string, string> {
+  try {
+    const v = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'))
+    const ds: { key: string; value: string }[] = v?.headers?.[0]?.headers ?? []
+    return Object.fromEntries(ds.map((h) => [h.key, h.value]))
+  } catch {
+    return {}
+  }
+}
+const headers = docHeaderVercel()
 
 // Build ra MỘT file index.html duy nhất: mở bằng trình duyệt là chạy, không cần mạng
 export default defineConfig({
