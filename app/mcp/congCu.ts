@@ -89,6 +89,8 @@ export function tongQuan(d: DuLieu, a: { mst?: string; ngay_hom_nay?: string }) 
       hoaDon: q.hoaDon,
       khopDauKy: q.khopDauKy,
     })),
+    // Mọi khoản đã nộp ngân sách (GTGT, TNDN, môn bài, chậm nộp...) cộng theo NĂM NỘP trên chứng từ
+    nopNganSachTheoNam: tq.nopTheoNam,
     toKhaiKhac: tq.khac.map((k) => ({ ten: k.tenTKhai || `mã ${k.maTKhai}`, ky: k.ky, loai: k.loaiTKhai, lan: k.soLan, ngayLap: k.ngayLap, file: k.tenFile })),
   }
 }

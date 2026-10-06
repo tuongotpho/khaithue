@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { docTaiLieu, kyCuaChungTu, kyDangChu, tenTieuMuc } from './taiLieu.js'
+import { docTaiLieu, kyCuaChungTu, kyDangChu, kyDeDoc, tenTieuMuc } from './taiLieu.js'
 import { ghiAppXuat, ghiPhuSong, khoTrong, napHoaDon, napTaiLieu, type Kho } from './kho.js'
 import { tinhTongQuan } from './tongQuan.js'
 import type { HoaDon } from './types.js'
@@ -83,6 +83,24 @@ describe('Tổng quan doanh nghiệp', () => {
     const q = tinhTongQuan(kho, MST, new Date(2025, 9, 3))
     expect(q.hanToi).toMatchObject({ khoa: '2025-Q3', daCoToKhai: false, daXuat: true })
     expect(q.canhBao.some((c) => c.noiDung.includes('Quý 3/2025: mới có bản APP XUẤT'))).toBe(true)
+  })
+
+  it('mọi khoản nộp ngân sách cộng theo năm nộp, chia loại; tên khoản & kỳ dễ đọc', () => {
+    const ngay = (xml: string, d: string) => xml.replace('31/10/2025', d)
+    let kho = nap(khoTrong(), ngay(chungTu('1', '00/Q4/2024', 1_000_000), '03/02/2025'))
+    kho = nap(kho, ngay(chungTu('2', '00/CN/2024', 500_000, '1052'), '31/03/2025'))
+    kho = nap(kho, ngay(chungTu('3', '00/CN/2024', 1_000, '4918'), '05/05/2025'))
+    kho = nap(kho, ngay(chungTu('4', '00/CN/2025', 2_000_000, '2863'), '25/01/2025'))
+    kho = nap(kho, ngay(chungTu('5', '14/07/2026', 2_000, '4944'), '31/07/2026'))
+    const q = tinhTongQuan(kho, MST, HOM_NAY)
+    expect(q.nopTheoNam).toEqual([
+      { nam: 2026, theoNhom: { 'Chậm nộp, phạt': 2_000 }, tong: 2_000, soCT: 1 },
+      { nam: 2025, theoNhom: { GTGT: 1_000_000, TNDN: 500_000, 'Chậm nộp, phạt': 1_000, 'Môn bài': 2_000_000 }, tong: 3_501_000, soCT: 4 },
+    ])
+    expect(tenTieuMuc('4918')).toBe('Tiền chậm nộp thuế TNDN')
+    expect(kyDeDoc('00/Q3/2026')).toBe('quý 3/2026')
+    expect(kyDeDoc('00/CN/2024')).toBe('năm 2024')
+    expect(kyDeDoc('14/07/2026')).toBe('theo thông báo ngày 14/07/2026')
   })
 
   it('hoá đơn trùng giữa Excel (bỏ trống MST của mình) và XML: chỉ tính 1 lần', () => {

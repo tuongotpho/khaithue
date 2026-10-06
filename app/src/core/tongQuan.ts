@@ -5,7 +5,7 @@ import type { CanhBao, KyKeKhai } from './types.js'
 import { tachThueSuat } from './gtgt.js'
 import { denNgay, hanNop } from './ky.js'
 import { khoaKy, soCai, tenKy, tinhTrangKy, type Kho, type PhienBanGTGT, type ToKhaiKhac } from './kho.js'
-import { kyCuaChungTu, type ChungTu } from './taiLieu.js'
+import { kyCuaChungTu, nhomNop, type ChungTu, type NhomNop } from './taiLieu.js'
 
 export interface TongHD {
   n: number
@@ -41,6 +41,14 @@ export interface DongNam {
   soQuyCoToKhai: number
 }
 
+/** Tiền đã nộp ngân sách trong một năm (theo NGÀY NỘP trên chứng từ), chia theo loại khoản */
+export interface NopTheoNam {
+  nam: number
+  theoNhom: Partial<Record<NhomNop, number>>
+  tong: number
+  soCT: number
+}
+
 export interface TongQuan {
   quy: DongQuy[] // mới nhất trước
   nam: DongNam[] // mới nhất trước
@@ -48,6 +56,7 @@ export interface TongQuan {
   tuQuy: string | null
   khac: ToKhaiKhac[]
   chungTu: ChungTu[]
+  nopTheoNam: NopTheoNam[] // mới nhất trước
   /** daCoToKhai: đã nạp tờ khai ĐÃ NỘP (file XML); daXuat: app có xuất nhưng chưa thấy bản đã nộp */
   hanToi: { khoa: string; han: string; conNgay: number; daCoToKhai: boolean; daXuat: boolean } | null
 }
@@ -80,6 +89,21 @@ export function tinhTongQuan(kho: Kho, mst: string, homNay = new Date()): TongQu
     if (d.ndkt !== '1701') continue
     const k = kyCuaChungTu(d.kyThue)
     daNop.set(k, (daNop.get(k) ?? 0) + d.tien)
+  }
+
+  // Mọi khoản đã nộp ngân sách, cộng theo năm nộp
+  const nopNam = new Map<number, NopTheoNam>()
+  for (const ct of chungTu) {
+    const nam = Number(/(\d{4})$/.exec(ct.ngay)?.[1])
+    if (!nam) continue
+    const g = nopNam.get(nam) ?? { nam, theoNhom: {}, tong: 0, soCT: 0 }
+    g.soCT++
+    for (const d of ct.dong) {
+      const n = nhomNop(d.ndkt)
+      g.theoNhom[n] = (g.theoNhom[n] ?? 0) + d.tien
+      g.tong += d.tien
+    }
+    nopNam.set(nam, g)
   }
 
   // Hoá đơn còn hiệu lực theo quý
@@ -183,6 +207,7 @@ export function tinhTongQuan(kho: Kho, mst: string, homNay = new Date()): TongQu
     tuQuy: cacQuy[0] ?? null,
     khac,
     chungTu: chungTu.sort((a, b) => ngayTu(b.ngay).getTime() - ngayTu(a.ngay).getTime()),
+    nopTheoNam: [...nopNam.values()].sort((a, b) => b.nam - a.nam),
     hanToi,
   }
 }

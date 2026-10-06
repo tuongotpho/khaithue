@@ -93,8 +93,32 @@ const TIEU_MUC: Record<string, string> = {
   '2862': 'Lệ phí môn bài',
   '2863': 'Lệ phí môn bài',
   '2864': 'Lệ phí môn bài',
+  '4918': 'Tiền chậm nộp thuế TNDN',
+  '4944': 'Tiền chậm nộp các khoản khác',
 }
 export const tenTieuMuc = (ndkt: string) => TIEU_MUC[ndkt] ?? (ndkt.startsWith('49') ? `Tiền chậm nộp / phạt (${ndkt})` : `Tiểu mục ${ndkt}`)
+
+/** Nhóm khoản nộp ngân sách để cộng theo năm */
+export const NHOM_NOP = ['GTGT', 'TNDN', 'TNCN', 'Môn bài', 'Chậm nộp, phạt', 'Khác'] as const
+export type NhomNop = (typeof NHOM_NOP)[number]
+export function nhomNop(ndkt: string): NhomNop {
+  if (ndkt === '1701') return 'GTGT'
+  if (/^105\d$/.test(ndkt)) return 'TNDN'
+  if (/^100\d$/.test(ndkt)) return 'TNCN'
+  if (/^286\d$/.test(ndkt)) return 'Môn bài'
+  if (ndkt.startsWith('49')) return 'Chậm nộp, phạt'
+  return 'Khác'
+}
+
+/** Kỳ thuế trên chứng từ, dạng dễ đọc: "00/Q3/2026" -> "quý 3/2026"; "00/CN/2024" -> "năm 2024"; ngày -> "TB ngày …" */
+export function kyDeDoc(kyThue: string): string {
+  let m: RegExpExecArray | null
+  if ((m = /^\d{2}\/Q(\d)\/(\d{4})$/.exec(kyThue))) return `quý ${m[1]}/${m[2]}`
+  if ((m = /^\d{2}\/CN\/(\d{4})$/.exec(kyThue))) return `năm ${m[1]}`
+  if ((m = /^00\/(\d{2})\/(\d{4})$/.exec(kyThue))) return `tháng ${Number(m[1])}/${m[2]}`
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(kyThue)) return `theo thông báo ngày ${kyThue}`
+  return kyThue || '—'
+}
 
 /** "00/Q3/2025" -> "2025-Q3"; "00/10/2025" -> "2025-M10"; "00/CN/2025" -> "2025" */
 export function kyCuaChungTu(kyThue: string): string {

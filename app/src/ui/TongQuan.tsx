@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useRef, useState, type ReactNode } from 'react'
 import { tenKy } from '../core/kho'
 import { tien } from '../core/nhan'
-import { tenTieuMuc } from '../core/taiLieu'
+import { kyDeDoc, NHOM_NOP, nhomNop, tenTieuMuc } from '../core/taiLieu'
 import type { DoiSoatChieu, DoiSoatQuy, DoiTac, DongDoiTac, DongQuy, NguonQuy, TongQuan as TQ } from '../core/tongQuan'
 import { DanhSachCanhBao } from './chung'
 
@@ -390,6 +390,84 @@ function DoiSoat({ ds }: { ds: DoiSoatQuy[] }) {
   )
 }
 
+// ---------- Đã nộp ngân sách: cộng theo năm + danh sách chứng từ ----------
+
+function NopNganSach({ tq }: { tq: TQ }) {
+  const [tatCa, setTatCa] = useState(false)
+  const cot = NHOM_NOP.filter((n) => tq.nopTheoNam.some((x) => x.theoNhom[n]))
+  const chamNop = tq.chungTu.flatMap((c) => c.dong).filter((d) => nhomNop(d.ndkt) === 'Chậm nộp, phạt')
+  const dsCT = tatCa ? tq.chungTu : tq.chungTu.slice(0, 12)
+  return (
+    <div className="space-y-3">
+      {chamNop.length > 0 && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          ⚠️ Đã phải nộp <b className="tabular-nums">{tien(chamNop.reduce((s, d) => s + d.tien, 0))} đ</b> tiền chậm nộp / phạt ({chamNop.length} lần) — dấu hiệu có khoản thuế nộp muộn hạn.
+        </p>
+      )}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-left text-slate-500">
+            <tr>
+              <th className="p-2">Năm nộp</th>
+              {cot.map((n) => <th key={n} className="p-2 text-right">{n === 'GTGT' || n === 'TNDN' || n === 'TNCN' ? `Thuế ${n}` : n}</th>)}
+              <th className="p-2 text-right">Tổng</th>
+              <th className="p-2 text-right">Số CT</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tq.nopTheoNam.map((x) => (
+              <tr key={x.nam} className="border-t border-slate-100">
+                <td className="p-2 font-medium">{x.nam}</td>
+                {cot.map((n) => (
+                  <td key={n} className={`p-2 text-right tabular-nums ${n === 'Chậm nộp, phạt' && x.theoNhom[n] ? 'font-semibold text-amber-800' : ''}`}>
+                    {x.theoNhom[n] ? tien(x.theoNhom[n]!) : <span className="text-slate-300">—</span>}
+                  </td>
+                ))}
+                <td className="p-2 text-right font-semibold tabular-nums">{tien(x.tong)}</td>
+                <td className="p-2 text-right tabular-nums">{x.soCT}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-slate-500">
+        Cộng theo <b>ngày nộp</b> trên chứng từ (vd thuế TNDN năm 2024 nộp tháng 3/2025 thì tính vào năm 2025). Thuế GTGT theo từng quý: xem cột “Đã nộp” ở bảng “Theo dõi từng quý”.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-left text-slate-500">
+            <tr>
+              <th className="p-2">Ngày nộp</th>
+              <th className="p-2">Khoản nộp</th>
+              <th className="p-2">Kỳ</th>
+              <th className="p-2 text-right">Số tiền</th>
+              <th className="p-2">Số chứng từ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {dsCT.flatMap((c) =>
+              c.dong.map((d, i) => (
+                <tr key={`${c.so}-${i}`} className="border-t border-slate-100">
+                  <td className="whitespace-nowrap p-2 tabular-nums">{i === 0 ? c.ngay : ''}</td>
+                  <td className={`p-2 ${nhomNop(d.ndkt) === 'Chậm nộp, phạt' ? 'text-amber-800' : ''}`}>{tenTieuMuc(d.ndkt)}</td>
+                  <td className="p-2 text-slate-600">{kyDeDoc(d.kyThue)}</td>
+                  <td className="p-2 text-right tabular-nums">{tien(d.tien)}</td>
+                  <td className="p-2 tabular-nums text-slate-500">{i === 0 ? c.so : ''}</td>
+                </tr>
+              )),
+            )}
+          </tbody>
+        </table>
+      </div>
+      {tq.chungTu.length > 12 && (
+        <button className="text-sm text-emerald-700 underline" onClick={() => setTatCa(!tatCa)}>
+          {tatCa ? 'Chỉ xem 12 chứng từ gần nhất' : `Xem tất cả ${tq.chungTu.length} chứng từ`}
+        </button>
+      )}
+    </div>
+  )
+}
+
 const CAC_PHAN = ['soLieu', 'bieuDo', 'canXuLy', 'theoQuy', 'doiSoat', 'khachHang', 'nhaCungCap', 'chungTu', 'khac']
 
 export function TongQuanDN({ tq, tenCty, onMoQuy, layDoiTac, doiSoat }: {
@@ -460,7 +538,7 @@ export function TongQuanDN({ tq, tenCty, onMoQuy, layDoiTac, doiSoat }: {
             <The nhan={`Doanh thu ${n.nam}`} giaTri={trieu(n.doanhThu)} phu={`${tien(n.doanhThu)} đ`} />
             <The nhan={`Mua vào ${n.nam}`} giaTri={trieu(n.muaVao)} phu={`${tien(n.muaVao)} đ`} />
             <The nhan="Thuế GTGT phải nộp" giaTri={`${tien(n.phaiNop)} đ`} phu={`${n.soQuyCoToKhai}/4 quý đã có tờ khai`} />
-            <The nhan="Đã nộp (theo chứng từ)" giaTri={`${tien(n.daNop)} đ`} phu={n.daNop >= n.phaiNop ? 'đủ' : `chênh ${tien(n.phaiNop - n.daNop)} đ`} />
+            <The nhan="Thuế GTGT đã nộp (theo chứng từ)" giaTri={`${tien(n.daNop)} đ`} phu={n.daNop >= n.phaiNop ? 'đủ' : `chênh ${tien(n.phaiNop - n.daNop)} đ`} />
           </div>
         </PhanThuGon>
       )}
@@ -549,14 +627,14 @@ export function TongQuanDN({ tq, tenCty, onMoQuy, layDoiTac, doiSoat }: {
       </PhanThuGon>
 
       {tq.chungTu.length > 0 && (
-        <PhanThuGon id="chungTu" tieuDe="Chứng từ nộp tiền vào ngân sách" phu={`${tq.chungTu.length} chứng từ`} dong={dong} setDong={setDong}>
-          <ul className="space-y-1 text-sm">
-            {tq.chungTu.map((c) => (
-              <li key={c.so}>
-                {c.ngay} — <b className="tabular-nums">{tien(c.tong)} đ</b> — {c.dong.map((d) => `${tenTieuMuc(d.ndkt)} kỳ ${d.kyThue.replace(/^00\//, '')}`).join('; ')} <span className="text-slate-400">(số {c.so})</span>
-              </li>
-            ))}
-          </ul>
+        <PhanThuGon
+          id="chungTu"
+          tieuDe="💰 Đã nộp ngân sách (theo chứng từ)"
+          phu={`${tq.chungTu.length} chứng từ · ${tien(tq.nopTheoNam.reduce((s, x) => s + x.tong, 0))} đ`}
+          dong={dong}
+          setDong={setDong}
+        >
+          <NopNganSach tq={tq} />
         </PhanThuGon>
       )}
 
