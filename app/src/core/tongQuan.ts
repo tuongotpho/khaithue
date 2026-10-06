@@ -109,8 +109,7 @@ export function tinhTongQuan(kho: Kho, mst: string, homNay = new Date()): TongQu
   // Hoá đơn còn hiệu lực theo quý
   const hdQuy = new Map<string, { ban: TongHD; mua: TongHD }>()
   for (const h of hoaDon) {
-    const t = h.tt.toLowerCase()
-    if (t.includes('bị thay thế') || t.includes('xóa bỏ') || t.includes('hủy bỏ') || t.includes('xoá bỏ') || t.includes('huỷ bỏ')) continue
+    if (laHuy(h.tt)) continue
     const k = quyCuaNgay(h.ng)
     if (!k) continue
     const g = hdQuy.get(k) ?? { ban: { n: 0, v: 0, t: 0 }, mua: { n: 0, v: 0, t: 0 } }
@@ -168,6 +167,8 @@ export function tinhTongQuan(kho: Kho, mst: string, homNay = new Date()): TongQu
 
   // Cảnh báo
   const canhBao: CanhBao[] = []
+  const phuMua = kho.phuSong?.[mst]?.mua
+  const duThangMua = (k: KyKeKhai) => !phuMua || [0, 1, 2].every((i) => phuMua.includes(`${k.nam}-${String((k.quy - 1) * 3 + 1 + i).padStart(2, '0')}`))
 
   for (const q of quy) {
     const ten = tenKy(q.khoa)
@@ -182,6 +183,22 @@ export function tinhTongQuan(kho: Kho, mst: string, homNay = new Date()): TongQu
     if (q.hieuLuc && q.hoaDon && q.hoaDon.ban.n > 0) {
       const lech = (q.hieuLuc.ct34 ?? 0) - q.hoaDon.ban.v
       if (Math.abs(lech) > 1000) canhBao.push({ muc: 'chu_y', noiDung: `Quý ${ten}: doanh thu trên tờ khai ${tien(q.hieuLuc.ct34 ?? 0)} đ khác tổng hoá đơn bán ra ${tien(q.hoaDon.ban.v)} đ (lệch ${tien(lech)} đ).` })
+    }
+    // Mua vào: chỉ so khi danh sách hoá đơn mua vào đã phủ đủ 3 tháng của quý (tránh báo nhầm do thiếu file)
+    if (q.hieuLuc && q.hoaDon && q.hoaDon.mua.n > 0 && duThangMua(q.ky)) {
+      const tk = q.hieuLuc.ct23 ?? 0
+      const lech = tk - q.hoaDon.mua.v
+      if (lech > 1000) {
+        // Tờ khai khai nhiều hơn hoá đơn còn hiệu lực: tìm hoá đơn đã bị thay thế/huỷ trong quý có giá trị đúng bằng phần chênh
+        const thuPham = hoaDon.filter((h) => h.l === 'mua' && laHuy(h.tt) && quyCuaNgay(h.ng) === q.khoa && Math.abs(h.v - lech) <= 1000)
+        canhBao.push(
+          thuPham.length
+            ? { muc: 'loi', noiDung: `Quý ${ten}: mua vào trên tờ khai [23] ${tien(tk)} đ nhiều hơn hoá đơn còn hiệu lực ${tien(q.hoaDon.mua.v)} đ (lệch ${tien(lech)} đ) — đúng bằng hoá đơn ${thuPham.map((h) => `${h.kh}-${h.so} (${h.tt.toLowerCase()})`).join(', ')}. Nhiều khả năng đã khấu trừ hoá đơn hết hiệu lực → khai thừa thuế đầu vào, cần khai bổ sung.` }
+            : { muc: 'chu_y', noiDung: `Quý ${ten}: mua vào trên tờ khai [23] ${tien(tk)} đ nhiều hơn hoá đơn còn hiệu lực ${tien(q.hoaDon.mua.v)} đ (lệch ${tien(lech)} đ). Kiểm tra có khấu trừ hoá đơn đã bị thay thế/huỷ, hoặc khoản không có trong danh sách hoá đơn.` },
+        )
+      } else if (lech < -1000) {
+        canhBao.push({ muc: 'chu_y', noiDung: `Quý ${ten}: còn ${tien(-lech)} đ hoá đơn mua vào chưa kê khai (hoá đơn ${tien(q.hoaDon.mua.v)} đ, tờ khai [23] ${tien(tk)} đ). Nếu đủ điều kiện có thể kê khai vào kỳ sau để được khấu trừ.` })
+      }
     }
   }
 

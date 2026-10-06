@@ -3,6 +3,8 @@ import { docTaiLieu, kyCuaChungTu, kyDangChu, kyDeDoc, tenTieuMuc } from './taiL
 import { ghiAppXuat, ghiPhuSong, khoTrong, napHoaDon, napTaiLieu, type Kho } from './kho.js'
 import { tinhTongQuan } from './tongQuan.js'
 import type { HoaDon } from './types.js'
+import { gopHoaDon } from './excel.js'
+import { tinhGTGT } from './gtgt.js'
 
 const MST = '0100000000'
 const tk = (ky: string, ct: Record<string, number>, ma = '842', kieuKy = 'Q', ten = 'TỜ KHAI THUẾ GIÁ TRỊ GIA TĂNG') =>
@@ -101,6 +103,63 @@ describe('Tổng quan doanh nghiệp', () => {
     expect(kyDeDoc('00/Q3/2026')).toBe('quý 3/2026')
     expect(kyDeDoc('00/CN/2024')).toBe('năm 2024')
     expect(kyDeDoc('14/07/2026')).toBe('theo thông báo ngày 14/07/2026')
+  })
+
+  describe('Mua vào trên tờ khai lệch hoá đơn', () => {
+    const mua = (so: string, ngay: string, v: number, trangThai = 'Hóa đơn mới', file = 'mua.xlsx'): HoaDon => ({
+      loai: 'mua', kyHieuMau: '1', kyHieu: 'C26TXX', so, ngay, mstBan: '0200000009', tenBan: 'NCC', mstMua: MST, tenMua: 'Cty',
+      chuaThue: v, thue: v * 0.08, trangThai, file,
+    })
+    // Cặp "bị thay thế / thay thế" giống vụ thật: HĐ 18 bị HĐ 19 thay thế, tờ khai lại khai cả hai
+    const kho0 = () => {
+      let kho = nap(khoTrong(), tk('1/2026', { ct22: 0, ct23: 190_000_000, ct34: 0, ct40: 0, ct43: 0 }))
+      kho = napHoaDon(kho, MST, [
+        mua('17', '10/01/2026', 5_000_000),
+        mua('18', '26/02/2026', 90_000_000, 'Hóa đơn đã bị thay thế'),
+        mua('19', '27/02/2026', 95_000_000, 'Hóa đơn thay thế'),
+      ])
+      return kho
+    }
+    const HN = new Date(2026, 9, 7)
+
+    it('tờ khai khấu trừ cả hoá đơn đã bị thay thế -> LỖI, chỉ đích danh hoá đơn', () => {
+      const kho = ghiPhuSong(kho0(), MST, { ban: [], mua: ['2026-01', '2026-02', '2026-03'] })
+      const cb = tinhTongQuan(kho, MST, HN).canhBao.filter((c) => c.noiDung.includes('mua vào'))
+      expect(cb).toHaveLength(1)
+      expect(cb[0].muc).toBe('loi')
+      expect(cb[0].noiDung).toContain('lệch 90.000.000 đ')
+      expect(cb[0].noiDung).toContain('C26TXX-18')
+    })
+
+    it('danh sách hoá đơn mua vào chưa đủ 3 tháng -> không báo (tránh báo nhầm do thiếu file)', () => {
+      const kho = ghiPhuSong(kho0(), MST, { ban: [], mua: ['2026-01', '2026-02'] })
+      expect(tinhTongQuan(kho, MST, HN).canhBao.some((c) => c.noiDung.includes('mua vào'))).toBe(false)
+    })
+
+    it('hoá đơn mua vào nhiều hơn tờ khai -> nhắc còn hoá đơn chưa kê khai', () => {
+      let kho = nap(khoTrong(), tk('1/2026', { ct22: 0, ct23: 5_000_000, ct34: 0, ct40: 0, ct43: 0 }))
+      kho = napHoaDon(kho, MST, [mua('17', '10/01/2026', 5_000_000), mua('20', '15/03/2026', 2_000_000)])
+      kho = ghiPhuSong(kho, MST, { ban: [], mua: ['2026-01', '2026-02', '2026-03'] })
+      const cb = tinhTongQuan(kho, MST, HN).canhBao.find((c) => c.noiDung.includes('mua vào'))
+      expect(cb).toMatchObject({ muc: 'chu_y' })
+      expect(cb!.noiDung).toContain('còn 2.000.000 đ hoá đơn mua vào chưa kê khai')
+    })
+
+    it('LẬP TỜ KHAI: chỉ khấu trừ hoá đơn thay thế, bỏ hoá đơn bị thay thế; trạng thái mới nhất thắng khi trùng giữa 2 file', () => {
+      const ky = { quy: 1, nam: 2026 } as const
+      const ds = [
+        mua('17', '10/01/2026', 5_000_000),
+        mua('18', '26/02/2026', 90_000_000, 'Hóa đơn mới', 'tai-lan-1.xlsx'), // lần tải đầu: còn "mới"
+        mua('18', '26/02/2026', 90_000_000, 'Hóa đơn đã bị thay thế', 'tai-lan-2.xlsx'), // tải lại: đã bị thay thế
+        mua('19', '27/02/2026', 95_000_000, 'Hóa đơn thay thế'),
+        mua('21', '20/03/2026', 1_000_000, 'Hóa đơn đã bị xóa bỏ'),
+      ]
+      const g = gopHoaDon(ds, ky)
+      expect(g.mua.map((h) => h.so).sort()).toEqual(['17', '19'])
+      expect(g.boQua.map((h) => h.so).sort()).toEqual(['18', '21'])
+      const ct = tinhGTGT([], g.mua).toKhai.ct
+      expect([ct.ct23, ct.ct24]).toEqual([100_000_000, 8_000_000])
+    })
   })
 
   it('hoá đơn trùng giữa Excel (bỏ trống MST của mình) và XML: chỉ tính 1 lần', () => {
