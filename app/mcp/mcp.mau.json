@@ -1,0 +1,10 @@
+{
+  "_ghiChu": "MẪU. Chép thành du-lieu-rieng/mcp.json (không đưa lên git) rồi sửa đường dẫn. chi: xml | excel | bỏ trống = cả hai.",
+  "thuMuc": [
+    { "duongDan": "D:/Ho-so-thue/2025", "chi": "xml" },
+    { "duongDan": "D:/Ho-so-thue/2026", "chi": "xml" },
+    { "duongDan": "D:/Ho-so-thue/Hoa-don-da-lam-sach", "chi": "excel" }
+  ],
+  "traVe": [],
+  "thuMucXuat": "D:/Ho-so-thue/xml-ra"
+}

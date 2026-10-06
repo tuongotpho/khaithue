@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { dauKy, datKhongChapNhan, ghiAppXuat, khoTrong, napToKhai, soCai, suaHoSo, tncnGanNhat } from './kho'
-import type { ToKhaiDaNop } from './docToKhai'
-import type { HoSoDN } from './types'
+import { dauKy, datKhongChapNhan, ghiAppXuat, khoTrong, napToKhai, soCai, suaHoSo, tncnGanNhat } from './kho.js'
+import type { ToKhaiDaNop } from './docToKhai.js'
+import type { HoSoDN } from './types.js'
 
 const HS: HoSoDN = {
   mst: '0100000000', tenNNT: 'Cty A', dchiNNT: 'Đ/c cũ', phuongXa: '', maXaNNT: '', maTinhNNT: '217', tenTinhNNT: 'Phú Thọ',
@@ -81,7 +81,7 @@ describe('Sổ theo dõi tờ khai', () => {
   })
 })
 
-import { gopTuMay } from './kho'
+import { gopTuMay } from './kho.js'
 
 describe('Gộp dữ liệu từ mây', () => {
   it('dựng lại sổ từ các bản ghi trên mây, giữ cờ "CQT trả về", nhớ mã bản ghi', () => {

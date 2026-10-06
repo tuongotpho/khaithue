@@ -1,8 +1,8 @@
 // Đọc file Excel "DANH SÁCH HÓA ĐƠN" tải từ cổng hoá đơn điện tử.
 // Hàm nhận vào mảng các dòng (mỗi dòng là mảng ô) để chạy được cả trên trình duyệt lẫn trong test.
 
-import type { CanhBao, HoaDon, KyKeKhai, LoaiHD } from './types'
-import { trongKy } from './ky'
+import type { CanhBao, HoaDon, KyKeKhai, LoaiHD } from './types.js'
+import { trongKy } from './ky.js'
 
 type O = string | number | boolean | null | undefined
 
@@ -349,4 +349,31 @@ export function phuSongCuaTep(t: TepHoaDon, hoaDon: HoaDon[]): PhuSong {
     kq[l] = [...thang].sort()
   }
   return kq
+}
+
+/** Quý có nhiều hoá đơn nhất trong một nhóm hoá đơn (để ghi "kỳ" của file khi lưu lên mây) */
+export function quyNhieuNhat(ds: { ngay: string }[]): KyKeKhai | null {
+  const dem = new Map<string, number>()
+  for (const h of ds) {
+    const m = /^\d{1,2}\/(\d{1,2})\/(\d{4})/.exec(h.ngay)
+    if (m) {
+      const k = `${m[2]}-${Math.ceil(Number(m[1]) / 3)}`
+      dem.set(k, (dem.get(k) ?? 0) + 1)
+    }
+  }
+  const top = [...dem.entries()].sort((a, b) => b[1] - a[1])[0]
+  if (!top) return null
+  const [nam, quy] = top[0].split('-').map(Number)
+  return { nam, quy: quy as 1 | 2 | 3 | 4 }
+}
+
+/** Các tháng mà các sheet của MỘT file phủ, sau khi đã xếp bán/mua theo công ty */
+export function phuSongFile(ts: TepHoaDon[], mstCty: string): PhuSong {
+  const kq: PhuSong = { ban: [], mua: [] }
+  for (const t of ts) {
+    const p = phuSongCuaTep(t, phanLoai([t], mstCty).hoaDon)
+    kq.ban.push(...p.ban)
+    kq.mua.push(...p.mua)
+  }
+  return { ban: [...new Set(kq.ban)].sort(), mua: [...new Set(kq.mua)].sort() }
 }

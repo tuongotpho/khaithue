@@ -1,6 +1,6 @@
 // Tờ khai 05/KK-TNCN (TT80/2021) — khấu trừ thuế TNCN từ tiền lương, tiền công
 
-import type { CanhBao } from './types'
+import type { CanhBao } from './types.js'
 
 /** Ô người khai tự nhập. Các ô tổng [18] [21] [26] [29] app tự cộng. */
 export interface NhapTNCN {

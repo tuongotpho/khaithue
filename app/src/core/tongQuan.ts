@@ -1,11 +1,11 @@
 // TỔNG QUAN doanh nghiệp từ hồ sơ thuế: từng quý, từng năm, và các cảnh báo cần xử lý.
 // Nguồn: sổ tờ khai (01/GTGT, 05/KK-TNCN), chứng từ nộp tiền, hoá đơn rút gọn.
 
-import type { CanhBao, KyKeKhai } from './types'
-import { tachThueSuat } from './gtgt'
-import { denNgay, hanNop } from './ky'
-import { khoaKy, soCai, tenKy, tinhTrangKy, type Kho, type PhienBanGTGT, type ToKhaiKhac } from './kho'
-import { kyCuaChungTu, type ChungTu } from './taiLieu'
+import type { CanhBao, KyKeKhai } from './types.js'
+import { tachThueSuat } from './gtgt.js'
+import { denNgay, hanNop } from './ky.js'
+import { khoaKy, soCai, tenKy, tinhTrangKy, type Kho, type PhienBanGTGT, type ToKhaiKhac } from './kho.js'
+import { kyCuaChungTu, type ChungTu } from './taiLieu.js'
 
 export interface TongHD {
   n: number

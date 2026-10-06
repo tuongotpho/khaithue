@@ -1,4 +1,4 @@
-import type { KyKeKhai } from './types'
+import type { KyKeKhai } from './types.js'
 
 const hai = (n: number) => String(n).padStart(2, '0')
 

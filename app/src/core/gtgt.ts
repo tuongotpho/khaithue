@@ -1,7 +1,7 @@
 // Tính tờ khai 01/GTGT (TT80/2021) kèm phụ lục giảm thuế GTGT (NQ142 / NQ204, mức 10% -> 8%)
 // Công thức đã đối chiếu với các tờ khai HTKK đã nộp thật của công ty (xem test).
 
-import type { CanhBao, DongPhuLucBan, DongPhuLucMua, HoaDon, ToKhaiGTGT } from './types'
+import type { CanhBao, DongPhuLucBan, DongPhuLucMua, HoaDon, ToKhaiGTGT } from './types.js'
 
 /** Phần giá trị/thuế của một hoá đơn theo từng thuế suất */
 export interface TachThueSuat {

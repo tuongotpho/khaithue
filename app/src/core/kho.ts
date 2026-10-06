@@ -7,10 +7,10 @@
 //   "Chỉ tiêu [22] NNT kê khai phải = Chỉ tiêu [43] trên TK lần đầu của kỳ liền kề trước"
 // => [22] lấy từ bản LẦN ĐẦU. Khai bổ sung kỳ trước làm đổi [43] thì phần chênh không đưa vào [22].
 
-import type { HoaDon, HoSoDN, KyKeKhai } from './types'
-import type { ToKhaiDaNop } from './docToKhai'
-import type { ChungTu, TaiLieu } from './taiLieu'
-import { conHieuLuc } from './excel'
+import type { HoaDon, HoSoDN, KyKeKhai } from './types.js'
+import type { ToKhaiDaNop } from './docToKhai.js'
+import type { ChungTu, TaiLieu } from './taiLieu.js'
+import { conHieuLuc } from './excel.js'
 
 export interface PhienBanGTGT {
   loaiTKhai: 'C' | 'B'

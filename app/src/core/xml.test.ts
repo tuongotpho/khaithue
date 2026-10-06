@@ -5,11 +5,11 @@
 import { describe, expect, it } from 'vitest'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { docToKhai } from './docToKhai'
-import { tinhGTGT } from './gtgt'
-import { tinhTNCN, NHAP_TNCN_TRONG } from './tncn'
-import { tenFileXML, xmlGTGT, xmlTNCN } from './xml'
-import type { HoaDon, HoSoDN } from './types'
+import { docToKhai } from './docToKhai.js'
+import { tinhGTGT } from './gtgt.js'
+import { tinhTNCN, NHAP_TNCN_TRONG } from './tncn.js'
+import { tenFileXML, xmlGTGT, xmlTNCN } from './xml.js'
+import type { HoaDon, HoSoDN } from './types.js'
 
 const DN: HoSoDN = {
   mst: '0100000000', tenNNT: 'Công ty TNHH Mẫu & Thử <Test>', dchiNNT: 'Số 1, Phường A', phuongXa: 'Phường A', maXaNNT: '21701002',
@@ -68,7 +68,7 @@ describe('Xuất XML', () => {
   })
 })
 
-import { docDanhSachHoaDon, ngayLap } from './excel'
+import { docDanhSachHoaDon, ngayLap } from './excel.js'
 
 describe('Đọc Excel: các kiểu ô lạ', () => {
   it('ô ngày kiểu số sê-ri Excel đổi về dd/MM/yyyy', () => {

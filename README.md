@@ -30,7 +30,7 @@ Mở trang web (Vercel), hoặc nhấp đúp `KeKhaiThue.html` để dùng khôn
 
 Nhiều công ty: kéo XML của công ty khác vào là có thêm công ty, chọn ở bước 2. Thông tin công ty sửa tay được.
 
-Dữ liệu chỉ xử lý và lưu trên trình duyệt của máy đang dùng. Trang web bị cấm gửi dữ liệu ra ngoài (`connect-src 'none'` trong `vercel.json`).
+Chưa đăng nhập: dữ liệu chỉ xử lý và lưu trên trình duyệt của máy đang dùng. Trang web chỉ được nói chuyện với Firebase/Google (`connect-src` trong `app/vercel.json`), không gửi dữ liệu đi nơi khác.
 
 ## Quy tắc tính (đã đối chiếu với tờ khai nộp thật)
 
@@ -45,6 +45,39 @@ Dữ liệu chỉ xử lý và lưu trên trình duyệt của máy đang dùng.
 
 - **Đầu kỳ – cuối kỳ:** theo quy tắc cơ quan thuế, *“[22] phải = [43] trên TK lần đầu của kỳ liền kề trước”*. App lấy [22] từ bản **lần đầu**, không lấy bản bổ sung. Lệch thì app **khoá nút xuất file**. Quý trước có khai bổ sung thì app nhắc khai phần chênh ở [37]/[38].
 - **Số hoá đơn bán ra:** hụt số giữa chừng thì app nhắc kiểm xem đã tải đủ file các tháng chưa.
+
+## Kết nối AI (MCP) — hỏi Claude / Codex về hồ sơ thuế
+
+`app/mcp/` là **máy chủ MCP** (cổng nối chuẩn để AI gọi công cụ). AI hỏi được: *“quý 3 phải nộp bao nhiêu?”*, *“đối soát tờ khai với hoá đơn năm 2025”*, *“lập tờ khai quý này”*, *“nạp file chứng từ này lên hồ sơ”*… và nhận về **đúng con số app tính** (dùng chung `app/src/core`, không viết lại công thức).
+
+### Cách 1 — trên mạng, máy nào cũng dùng được (dữ liệu thật của web app)
+
+Gõ một lần trên máy cần dùng (PowerShell hoặc Terminal):
+
+```
+claude mcp add --transport http khaithue https://khaithue.vercel.app/mcp
+```
+
+Lần đầu dùng, trình duyệt mở trang **“Cho phép AI truy cập hồ sơ thuế”** → đăng nhập Google (đúng tài khoản dùng web app) → xong. Lệnh này cũng hiện sẵn trong ô tài khoản trên web app (bấm để chép). Claude Desktop / claude.ai: thêm “custom connector” với cùng địa chỉ.
+
+- AI làm việc **bằng quyền của chính tài khoản Google đó**: luật phân quyền Firebase vẫn canh cửa, chỉ thấy hồ sơ của mình. Máy chủ không có chìa khoá tổng.
+- Đọc: tổng quan, sổ theo dõi, lập thử tờ khai, tra hoá đơn, đối tác, đối soát, chứng từ, danh sách tài liệu.
+- Ghi: nạp file (tờ khai / chứng từ / hoá đơn XML, Excel), đánh dấu CQT trả về, sửa thông tin công ty, lưu tờ khai đã lập (XML chưa ký).
+- **Xoá** từng file: AI phải gửi kèm đúng tên file làm xác nhận, không hoàn tác được. Xoá cả công ty vẫn chỉ làm trên web app.
+- **Không nộp gì lên cổng thuế.** Ký số và nộp luôn do người dùng tự làm.
+- Mỗi máy là một **phiên** — xem và **Thu hồi** trong ô tài khoản trên web app; ở đó cũng có nhật ký mọi lần AI ghi / xoá.
+- Riêng tư: số liệu đi qua máy chủ Vercel (chỉ xử lý, không lưu) và tới nhà cung cấp AI như mọi nội dung chat.
+- Trên Vercel cần biến môi trường bí mật `KHAITHUE_MCP_KHOA` (≥ 32 ký tự). Đổi khoá = mọi máy phải kết nối lại.
+
+### Cách 2 — chạy trên máy, đọc thẳng thư mục hồ sơ (không cần mạng)
+
+1. `cd app && npm install`
+2. Chép `app/mcp/mcp.mau.json` thành `du-lieu-rieng/mcp.json` (không lên git), sửa đường dẫn tới thư mục hồ sơ. Mỗi thư mục chọn `"chi": "xml"`, `"excel"` hoặc bỏ trống (cả hai). Tờ khai bị cơ quan thuế trả về thì ghi tên file vào `"traVe"`.
+3. Claude Code mở thư mục repo là thấy máy chủ `khaithue-thu-muc` (file `.mcp.json`). AI khác: lệnh `node`, tham số `["<repo>/app/node_modules/tsx/dist/cli.mjs", "<repo>/app/mcp/chay.ts"]`.
+
+Bản này chỉ đọc file; ghi duy nhất file XML tờ khai chưa ký (`xuat_xml_gtgt`).
+
+Kiểm: `npm test` (máy chủ MCP + cổng đăng nhập), `npm run test:quyen` (AI ↔ web app trên máy giả lập Firebase: đọc, ghi, xoá có xác nhận, thu hồi). Chạy thử bản mạng trên máy: `npm run mcp:web`.
 
 ## Dành cho người sửa mã
 
@@ -62,11 +95,12 @@ npm run dong-goi   # build + chép thành KeKhaiThue.html (bản dùng không c�
 ## Đưa lên mạng (GitHub + Vercel)
 
 - Đẩy code lên GitHub thì GitHub Actions chạy test + build (`.github/workflows/kiem-tra.yml`).
-- Vercel nối với repo thì **tự deploy mỗi lần push**. Cấu hình nằm sẵn trong `vercel.json`, không phải chỉnh gì trên Vercel. Test hỏng thì Vercel không đưa bản lỗi lên.
+- Vercel nối với repo thì **tự deploy mỗi lần push**. Cấu hình nằm trong `app/vercel.json` (dự án Vercel đặt thư mục gốc là `app/`), không phải chỉnh gì trên Vercel. Test hỏng thì Vercel không đưa bản lỗi lên.
 - `du-lieu-rieng/` (dữ liệu thật để đối chiếu) đã bị loại khỏi git trong `.gitignore`.
 
 ## Cấu trúc
 
 - `app/src/core/`: phần tính toán, không phụ thuộc giao diện.
+- `app/mcp/`: máy chủ MCP cho AI (`congCu.ts` các công cụ đọc, `mayChu.ts` khai báo với AI, `nguon.ts` + `chay.ts` bản chạy trên máy; `may/` bản trên mạng: `web.ts` cổng đăng nhập + /mcp, `khoMay.ts` đọc/ghi Firebase như web app, `congCuMay.ts` công cụ ghi/xoá). `app/api/mcp.ts` là hàm Vercel.
 - `reference/htkk/`: XSD và mẫu XML chép từ bộ cài HTKK (bản 2.8.3 cho GTGT, 2.9.3 cho TNCN).
 - Ca đối chiếu với tờ khai thật: `du-lieu-rieng/doi-chieu.json` (chỉ trên máy, không đưa lên git).

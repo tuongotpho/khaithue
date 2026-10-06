@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { docTaiLieu, kyCuaChungTu, kyDangChu, tenTieuMuc } from './taiLieu'
-import { ghiAppXuat, ghiPhuSong, khoTrong, napHoaDon, napTaiLieu, type Kho } from './kho'
-import { tinhTongQuan } from './tongQuan'
-import type { HoaDon } from './types'
+import { docTaiLieu, kyCuaChungTu, kyDangChu, tenTieuMuc } from './taiLieu.js'
+import { ghiAppXuat, ghiPhuSong, khoTrong, napHoaDon, napTaiLieu, type Kho } from './kho.js'
+import { tinhTongQuan } from './tongQuan.js'
+import type { HoaDon } from './types.js'
 
 const MST = '0100000000'
 const tk = (ky: string, ct: Record<string, number>, ma = '842', kieuKy = 'Q', ten = 'TỜ KHAI THUẾ GIÁ TRỊ GIA TĂNG') =>
@@ -95,7 +95,7 @@ describe('Tổng quan doanh nghiệp', () => {
   })
 })
 
-import { tinhDoiTac } from './tongQuan'
+import { tinhDoiTac } from './tongQuan.js'
 
 describe('Đối tác', () => {
   const h = (loai: 'ban' | 'mua', so: string, ngay: string, ten: string, mstDT: string, v: number, trangThai = 'Hóa đơn mới'): HoaDon => ({
@@ -204,7 +204,7 @@ describe('Đối tác lấy từ phụ lục tờ khai khi quý chưa có hoá �
   })
 })
 
-import { chuanTen } from './tongQuan'
+import { chuanTen } from './tongQuan.js'
 
 describe('So tên doanh nghiệp viết tắt', () => {
   it('CP / Cổ phần, CTY / Công ty, MTV, TM, DV... là một', () => {
@@ -214,7 +214,7 @@ describe('So tên doanh nghiệp viết tắt', () => {
   })
 })
 
-import { cacThang, docTep, phanLoai as phanLoaiTep, phuSongCuaTep } from './excel'
+import { cacThang, docTep, phanLoai as phanLoaiTep, phuSongCuaTep } from './excel.js'
 
 describe('Tháng phủ của file Excel', () => {
   it('đọc kỳ trên đầu file và các tháng có hoá đơn', () => {

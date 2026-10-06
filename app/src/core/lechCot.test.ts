@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { docTep, phanLoai } from './excel'
+import { docTep, phanLoai } from './excel.js'
 
 const CTY = '0100000000'
 const TD = ['STT', 'Ký hiệu mẫu số', 'Ký hiệu hóa đơn', 'Số hóa đơn', 'Ngày lập', 'MST người bán/MST người xuất hàng', 'Tên người bán/Tên người xuất hàng', 'Địa chỉ người bán', 'Tổng tiền chưa thuế', 'Tổng tiền thuế', 'Tổng tiền chiết khấu thương mại', 'Tổng tiền phí', 'Tổng tiền thanh toán', 'Đơn vị tiền tệ', 'Tỷ giá', 'Trạng thái hóa đơn']

@@ -1,8 +1,8 @@
 // Tạo file XML tờ khai theo khuôn HTKK (namespace kekhaithue.gdt.gov.vn).
 // File xuất ra CHƯA ký số — khi nộp trên thuedientu.gdt.gov.vn sẽ ký bằng USB token.
 
-import type { HoSoDN, KyKeKhai, ToKhaiGTGT } from './types'
-import { denNgay, ngayISO, tuNgay } from './ky'
+import type { HoSoDN, KyKeKhai, ToKhaiGTGT } from './types.js'
+import { denNgay, ngayISO, tuNgay } from './ky.js'
 
 /** Thông tin phần mềm ghi trong thẻ TTinDVu. Để ở một chỗ cho dễ đổi nếu cổng thuế yêu cầu khác. */
 export const DICH_VU = {

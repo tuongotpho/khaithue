@@ -10,7 +10,7 @@
 //
 // Mã bản ghi = mã băm SHA-256 của nội dung file: nạp lại cùng một file không sinh bản trùng.
 
-import { collection, deleteDoc, doc, getDocs, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
+import { collection, deleteDoc, doc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
 import { deleteObject, getBytes, ref, uploadBytes } from 'firebase/storage'
 import { db, luuTru } from './firebase'
 import type { CongTyLuu, HoaDonGon, ToKhaiMay } from '../core/kho'
@@ -168,4 +168,48 @@ export async function xoaCongTyTrenMay(uid: string, mst: string, tienDo?: (xong:
   }
   await deleteDoc(doc(db, nhanhCongTy(uid, mst)))
   return ds.length
+}
+
+// ---------------- AI kết nối qua MCP (máy chủ app/mcp/may) ----------------
+//   nguoiDung/{uid}/phienAI/{ma}     mỗi máy / ứng dụng AI được cho phép — xoá = thu hồi ngay
+//   nguoiDung/{uid}/nhatKyAI/{ma}    mỗi lần AI ghi / xoá dữ liệu
+
+export interface PhienAIMay {
+  id: string
+  tenMay: string
+  ungDung: string
+  noiNhan: string
+  taoLuc: Date | null
+}
+
+export interface DongNhatKyAI {
+  id: string
+  luc: Date | null
+  tenMay: string
+  congCu: string
+  moTa: string
+}
+
+const ngayCua = (v: unknown) => (v && typeof (v as { toDate?: () => Date }).toDate === 'function' ? (v as { toDate: () => Date }).toDate() : null)
+
+export async function taiPhienAI(uid: string): Promise<PhienAIMay[]> {
+  const ds = await getDocs(collection(db, `nguoiDung/${uid}/phienAI`))
+  return ds.docs
+    .map((d) => {
+      const x = d.data()
+      return { id: d.id, tenMay: String(x.tenMay ?? ''), ungDung: String(x.ungDung ?? ''), noiNhan: String(x.noiNhan ?? ''), taoLuc: ngayCua(x.taoLuc) }
+    })
+    .sort((a, b) => (b.taoLuc?.getTime() ?? 0) - (a.taoLuc?.getTime() ?? 0))
+}
+
+export async function thuHoiPhienAI(uid: string, id: string) {
+  await deleteDoc(doc(db, `nguoiDung/${uid}/phienAI/${id}`))
+}
+
+export async function taiNhatKyAI(uid: string, soDong = 15): Promise<DongNhatKyAI[]> {
+  const ds = await getDocs(query(collection(db, `nguoiDung/${uid}/nhatKyAI`), orderBy('luc', 'desc'), limit(soDong)))
+  return ds.docs.map((d) => {
+    const x = d.data()
+    return { id: d.id, luc: ngayCua(x.luc), tenMay: String(x.tenMay ?? ''), congCu: String(x.congCu ?? ''), moTa: String(x.moTa ?? '') }
+  })
 }

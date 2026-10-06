@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
-import { conHieuLuc, docTep, gopHoaDon, kiemSoHoaDonBan, phanLoai, phuSongCuaTep, type TepHoaDon } from './core/excel'
+import { conHieuLuc, docTep, gopHoaDon, kiemSoHoaDonBan, phanLoai, phuSongFile, quyNhieuNhat, type TepHoaDon } from './core/excel'
 import { kiemDauKy, tinhGTGT, NHAP_TAY_TRONG, type NhapTayGTGT, type SuaPhuLucMua } from './core/gtgt'
 import { tinhTNCN, NHAP_TNCN_TRONG, type NhapTNCN } from './core/tncn'
 import { docToKhai } from './core/docToKhai'
@@ -27,22 +27,6 @@ import { SoTheoDoi } from './ui/SoTheoDoi'
 import { KetLuanGTGT, PhuLuc, TheTong } from './ui/ToKhaiGTGT'
 
 const THIEU_CQT = (h: HoSoDN) => !h.maCQTNoiNop || !h.tenCQTNoiNop || !h.nguoiKy || !h.maTinhNNT
-
-/** Quý có nhiều hoá đơn nhất trong các file vừa nạp */
-function quyNhieuNhat(ds: { ngay: string }[]): KyKeKhai | null {
-  const dem = new Map<string, number>()
-  for (const h of ds) {
-    const m = /^\d{1,2}\/(\d{1,2})\/(\d{4})/.exec(h.ngay)
-    if (m) {
-      const k = `${m[2]}-${Math.ceil(Number(m[1]) / 3)}`
-      dem.set(k, (dem.get(k) ?? 0) + 1)
-    }
-  }
-  const top = [...dem.entries()].sort((a, b) => b[1] - a[1])[0]
-  if (!top) return null
-  const [nam, quy] = top[0].split('-').map(Number)
-  return { nam, quy: quy as 1 | 2 | 3 | 4 }
-}
 
 export default function App() {
   const { user, loi: loiDangNhap } = useNguoiDung()
@@ -297,17 +281,6 @@ export default function App() {
     } catch (e) {
       setTrangThaiMay(`⚠️ Chưa lưu được lên mây: ${(e as Error).message}`)
     }
-  }
-
-  /** Các tháng mà các sheet của MỘT file phủ, sau khi đã xếp bán/mua theo công ty */
-  function phuSongFile(ts: TepHoaDon[], mstCty: string) {
-    const kq = { ban: [] as string[], mua: [] as string[] }
-    for (const t of ts) {
-      const p = phuSongCuaTep(t, phanLoai([t], mstCty).hoaDon)
-      kq.ban.push(...p.ban)
-      kq.mua.push(...p.mua)
-    }
-    return { ban: [...new Set(kq.ban)].sort(), mua: [...new Set(kq.mua)].sort() }
   }
 
   /** Mở lại một quý từ kho trên mây: nạp lại các file Excel hoá đơn đã lưu */

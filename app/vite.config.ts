@@ -9,7 +9,7 @@ import { viteSingleFile } from 'vite-plugin-singlefile'
 // (không còn "headers") -> đọc không được thì bỏ qua, không được làm hỏng build.
 function docHeaderVercel(): Record<string, string> {
   try {
-    const v = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'))
+    const v = JSON.parse(readFileSync(new URL('./vercel.json', import.meta.url), 'utf8'))
     const ds: { key: string; value: string }[] = v?.headers?.[0]?.headers ?? []
     return Object.fromEntries(ds.map((h) => [h.key, h.value]))
   } catch {
@@ -23,7 +23,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), viteSingleFile()],
   base: './',
   preview: { headers },
-  // Test thường chỉ trong src/. Test cần máy giả lập Firebase (firebase-tests/) chạy riêng: npm run test:quyen
+  // Test thường trong src/ và mcp/ (máy chủ MCP cho AI). Test cần máy giả lập Firebase (firebase-tests/) chạy riêng: npm run test:quyen
   // Bài đối chiếu hồ sơ thật đọc vài trăm file trong OneDrive: cho dư thời gian
-  test: { include: ['src/**/*.test.ts'], testTimeout: 30000 },
+  test: { include: ['src/**/*.test.ts', 'mcp/**/*.test.ts'], testTimeout: 30000 },
 })

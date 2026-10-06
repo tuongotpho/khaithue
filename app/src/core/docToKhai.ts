@@ -3,7 +3,7 @@
 //  - lấy [43] quý trước làm [22] quý này
 //  - đối chiếu số liệu trong test
 
-import type { HoSoDN, KyKeKhai } from './types'
+import type { HoSoDN, KyKeKhai } from './types.js'
 
 /** Lấy text của thẻ đầu tiên tên `tag` (bỏ qua tiền tố namespace) */
 export function layThe(xml: string, tag: string): string {

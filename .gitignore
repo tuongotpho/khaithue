@@ -10,3 +10,6 @@ app/.xml-ra/
 # Nhật ký Firebase/emulator (có thể chứa email, thông tin project) — không bao giờ đưa lên git
 *.log
 dist/
+
+# Biến môi trường / mã tạm do Vercel CLI tạo — không bao giờ đưa lên git
+.env*

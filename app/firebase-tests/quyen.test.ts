@@ -12,7 +12,7 @@ let env: RulesTestEnvironment
 beforeAll(async () => {
   env = await initializeTestEnvironment({
     projectId: 'demo-khaithue',
-    firestore: { rules: readFileSync('../firebase/firestore.rules', 'utf8'), host: '127.0.0.1', port: 8080 },
+    firestore: { rules: readFileSync('../firebase/firestore.rules', 'utf8'), host: '127.0.0.1', port: Number(process.env.CONG_FIRESTORE_GIA_LAP) || 8080 },
     storage: { rules: readFileSync('../firebase/storage.rules', 'utf8'), host: '127.0.0.1', port: 9199 },
   })
 })

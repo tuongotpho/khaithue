@@ -30,7 +30,7 @@ export const luuTru = getStorage(app, 'gs://khaithue')
 
 if (GIA_LAP) {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
-  connectFirestoreEmulator(db, '127.0.0.1', 8080)
+  connectFirestoreEmulator(db, '127.0.0.1', Number(import.meta.env.VITE_CONG_FIRESTORE_GIA_LAP) || 8080)
   connectStorageEmulator(luuTru, '127.0.0.1', 9199)
   // CHỈ máy giả lập: đăng nhập bằng tài khoản Google giả để thử (bản build thật không có đoạn này)
   if (typeof window !== 'undefined') (window as unknown as { __dangNhapThu: (email: string) => Promise<unknown> }).__dangNhapThu = async (email: string) => {

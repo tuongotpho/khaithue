@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { kiemDauKy } from './gtgt'
-import { kiemSoHoaDonBan } from './excel'
-import type { HoaDon } from './types'
+import { kiemDauKy } from './gtgt.js'
+import { kiemSoHoaDonBan } from './excel.js'
+import type { HoaDon } from './types.js'
 
 describe('Bảo vệ đầu kỳ – cuối kỳ', () => {
   it('khớp thì không cảnh báo', () => expect(kiemDauKy(6_770_539, 6_770_539, '1/2026')).toEqual([]))

@@ -6,11 +6,11 @@ import { describe, expect, it } from 'vitest'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as XLSX from 'xlsx'
-import { docTep, gopHoaDon, phanLoai, phuSongCuaTep, type TepHoaDon } from './excel'
-import { tinhGTGT, NHAP_TAY_TRONG } from './gtgt'
-import { docToKhai } from './docToKhai'
-import { khoTrong, napToKhai, soCai } from './kho'
-import type { KyKeKhai } from './types'
+import { docTep, gopHoaDon, phanLoai, phuSongCuaTep, type TepHoaDon } from './excel.js'
+import { tinhGTGT, NHAP_TAY_TRONG } from './gtgt.js'
+import { docToKhai } from './docToKhai.js'
+import { khoTrong, napToKhai, soCai } from './kho.js'
+import type { KyKeKhai } from './types.js'
 
 XLSX.set_fs(fs)
 
@@ -100,9 +100,9 @@ describe.skipIf(!coDuLieu)('Đối chiếu với tờ khai 01/GTGT đã nộp', 
   })
 })
 
-import { docTaiLieu } from './taiLieu'
-import { ghiPhuSong, napHoaDon, napTaiLieu } from './kho'
-import { tinhDoiSoat, tinhDoiTac, tinhTongQuan } from './tongQuan'
+import { docTaiLieu } from './taiLieu.js'
+import { ghiPhuSong, napHoaDon, napTaiLieu } from './kho.js'
+import { tinhDoiSoat, tinhDoiTac, tinhTongQuan } from './tongQuan.js'
 
 interface CaTongQuan {
   homNay: string

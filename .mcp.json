@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "khaithue": {
+      "type": "http",
+      "url": "https://khaithue.vercel.app/mcp"
+    },
+    "khaithue-thu-muc": {
+      "command": "node",
+      "args": ["app/node_modules/tsx/dist/cli.mjs", "app/mcp/chay.ts"]
+    }
+  }
+}

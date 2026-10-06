@@ -9,6 +9,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
+    "mcp": "tsx mcp/chay.ts",
+    "mcp:web": "tsx mcp/may/chayWeb.ts",
     "kiem-xsd": "vitest run src/core/xml.test.ts && python scripts/kiem-xsd.py .xml-ra",
     "dong-goi": "npm run build && node -e \"require('fs').copyFileSync('dist/index.html','../KeKhaiThue.html')\"",
     "test:quyen": "cd .. && firebase emulators:exec --only auth,firestore,storage --project demo-khaithue \"cd app && npx vitest run -c vitest.quyen.config.ts\"",
@@ -16,10 +18,12 @@
     "gia-lap": "cd .. && firebase emulators:start --only auth,firestore,storage --project demo-khaithue"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "firebase": "^12.19.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",
@@ -30,6 +34,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "oxlint": "^1.81.0",
     "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.2",
     "vite": "^8.3.0",
     "vite-plugin-singlefile": "^2.3.3",

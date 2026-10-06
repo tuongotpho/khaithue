@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { phanLoai, type TepHoaDon } from './excel'
-import type { HoaDon } from './types'
+import { phanLoai, type TepHoaDon } from './excel.js'
+import type { HoaDon } from './types.js'
 
 const CTY = '0100000000'
 const hd = (mstBan: string, mstMua: string, so = '1'): HoaDon => ({

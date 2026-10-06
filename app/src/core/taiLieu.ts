@@ -4,8 +4,8 @@
 //  - Hoá đơn điện tử (HDon)
 // Loại chưa hiểu thì vẫn nhận diện tên gốc để lưu trữ, không bỏ sót.
 
-import { docToKhai, layThe, type ToKhaiDaNop } from './docToKhai'
-import type { HoaDon } from './types'
+import { docToKhai, layThe, type ToKhaiDaNop } from './docToKhai.js'
+import type { HoaDon } from './types.js'
 
 export interface DongChungTu {
   ndkt: string // tiểu mục (1701 = thuế GTGT ...)
