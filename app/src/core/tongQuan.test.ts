@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { docTaiLieu, kyCuaChungTu, kyDangChu, kyDeDoc, tenTieuMuc } from './taiLieu.js'
-import { ghiAppXuat, ghiPhuSong, khoTrong, napHoaDon, napTaiLieu, type Kho } from './kho.js'
+import { ghiAppXuat, ghiPhuSong, gopTuMay, khoTrong, napHoaDon, napTaiLieu, type Kho } from './kho.js'
 import { tinhTongQuan } from './tongQuan.js'
 import type { HoaDon } from './types.js'
 import { gopHoaDon } from './excel.js'
@@ -103,6 +103,46 @@ describe('Tổng quan doanh nghiệp', () => {
     expect(kyDeDoc('00/Q3/2026')).toBe('quý 3/2026')
     expect(kyDeDoc('00/CN/2024')).toBe('năm 2024')
     expect(kyDeDoc('14/07/2026')).toBe('theo thông báo ngày 14/07/2026')
+  })
+
+  describe('Chống trùng chứng từ nộp tiền', () => {
+    const ngay = (xml: string, d: string) => xml.replace('31/10/2025', d)
+    const tk3 = () => nap(khoTrong(), tk('3/2025', { ct22: 0, ct34: 0, ct40: 1_000_000, ct43: 0 }))
+
+    it('cùng chứng từ tải 2 lần (file khác vài byte) -> chỉ tính 1 lần', () => {
+      let kho = nap(tk3(), chungTu('77', '00/Q3/2025', 1_000_000), 'chungtu (1).xml')
+      kho = nap(kho, chungTu('77', '00/Q3/2025', 1_000_000).replace('<?xml version="1.0" encoding="UTF-8"?>', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'), 'chungtu (2).xml')
+      const q = tinhTongQuan(kho, MST, HOM_NAY)
+      expect(q.quy.find((x) => x.khoa === '2025-Q3')!.daNop).toBe(1_000_000)
+      expect(q.chungTu).toHaveLength(1)
+    })
+
+    it('cùng SỐ nhưng khác ngày (năm khác / kho bạc khác) -> 2 chứng từ khác nhau, không đè nhau', () => {
+      let kho = nap(tk3(), ngay(chungTu('77', '00/Q3/2025', 1_000_000), '20/10/2025'))
+      kho = nap(kho, ngay(chungTu('77', '00/CN/2024', 500_000, '1052'), '31/03/2025'))
+      expect(tinhTongQuan(kho, MST, HOM_NAY).chungTu).toHaveLength(2)
+    })
+
+    it('giấy nộp tiền KHÔNG có số chứng từ -> không tính là đã nộp, có cảnh báo', () => {
+      const khongSo = chungTu('', '00/Q3/2025', 1_000_000).replace('</CHUNGTU_HDR>', '<ID_CTU>0011242922441</ID_CTU></CHUNGTU_HDR>')
+      const tl = docTaiLieu(khongSo)
+      expect(tl.loai === 'chungTu' && [tl.ct.so, tl.ct.coSoCT]).toEqual(['0011242922441', false])
+      let kho = nap(tk3(), chungTu('77', '00/Q3/2025', 1_000_000))
+      kho = nap(kho, khongSo)
+      const q = tinhTongQuan(kho, MST, HOM_NAY)
+      expect(q.quy.find((x) => x.khoa === '2025-Q3')!.daNop).toBe(1_000_000) // không thành 2.000.000
+      expect(q.nopTheoNam[0].tong).toBe(1_000_000)
+      expect(q.canhBao.some((c) => c.noiDung.includes('1 giấy nộp tiền KHÔNG có số chứng từ'))).toBe(true)
+    })
+
+    it('sổ cũ trên máy khoá theo số: nạp lại từ mây không sinh bản trùng', () => {
+      let kho = tk3()
+      const ct = { so: '77', ngay: '31/10/2025', mst: MST, tenNNop: 'CTY', tong: 1_000_000, dong: [{ ndkt: '1701', noiDung: '', kyThue: '00/Q3/2025', tien: 1_000_000 }] }
+      kho = { ...kho, chungTu: { [MST]: { '77': ct } } } // khoá kiểu cũ
+      kho = gopTuMay(kho, [], [], [ct])
+      expect(Object.keys(kho.chungTu![MST])).toEqual(['77|31/10/2025'])
+      expect(tinhTongQuan(kho, MST, HOM_NAY).quy.find((x) => x.khoa === '2025-Q3')!.daNop).toBe(1_000_000)
+    })
   })
 
   describe('Mua vào trên tờ khai lệch hoá đơn', () => {

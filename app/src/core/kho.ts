@@ -9,7 +9,7 @@
 
 import type { HoaDon, HoSoDN, KyKeKhai } from './types.js'
 import type { ToKhaiDaNop } from './docToKhai.js'
-import type { ChungTu, TaiLieu } from './taiLieu.js'
+import { datChungTu, daXacNhan, type ChungTu, type TaiLieu } from './taiLieu.js'
 import { conHieuLuc } from './excel.js'
 
 export interface PhienBanGTGT {
@@ -308,7 +308,7 @@ export function gopTuMay(
     }
   }
   kho = structuredClone(kho)
-  for (const c of chungTu) ((kho.chungTu ??= {})[c.mst] ??= {})[c.so] = c
+  for (const c of chungTu) datChungTu(((kho.chungTu ??= {})[c.mst] ??= {}), c)
   for (const { mst, hd, phu } of hoaDon) {
     if (phu) kho = ghiPhuSong(kho, mst, phu)
     kho = napHoaDon(kho, mst, hd.filter((g) => !g.x).map((g) => moRongHoaDon(g, mst)))
@@ -363,7 +363,8 @@ export function napTaiLieu(kho0: Kho, tl: TaiLieu, tenFile: string, id?: string)
     const mst = tl.ct.mst
     if (!mst) return { kho: kho0, moTa: 'Chứng từ không có MST', loi: true }
     const kho: Kho = structuredClone(kho0)
-    ;((kho.chungTu ??= {})[mst] ??= {})[tl.ct.so] = tl.ct
+    datChungTu(((kho.chungTu ??= {})[mst] ??= {}), tl.ct)
+    if (!daXacNhan(tl.ct)) return { kho, moTa: `Giấy nộp tiền ngày ${tl.ct.ngay}: ${tl.ct.tong.toLocaleString('vi-VN')} đ — CHƯA có số chứng từ, không tính là đã nộp` }
     return { kho, moTa: `Chứng từ nộp tiền số ${tl.ct.so} ngày ${tl.ct.ngay}: ${tl.ct.tong.toLocaleString('vi-VN')} đ` }
   }
   if (tl.loai === 'hoaDon') {

@@ -7,7 +7,7 @@ import { docToKhai } from './core/docToKhai'
 import { tenFileXML, xmlGTGT, xmlTNCN } from './core/xml'
 import { denNgay, hanNop, ngayISO, quyCanKhai, tuNgay } from './core/ky'
 import { boCongTy, dauKy, datKhongChapNhan, ghiAppXuat, ghiPhuSong, gopTuMay, kyTruoc, napHoaDon, napTaiLieu, napToKhai, rutGonHoaDon, suaHoSo, tncnGanNhat, type Kho } from './core/kho'
-import { docTaiLieu } from './core/taiLieu'
+import { docTaiLieu, khoaChungTu } from './core/taiLieu'
 import { tinhDoiSoat, tinhDoiTac, tinhTongQuan } from './core/tongQuan'
 import { NapHangLoat, TongQuanDN } from './ui/TongQuan'
 import type { ToKhaiDaNop } from './core/docToKhai'
@@ -306,9 +306,11 @@ export default function App() {
     const tong = xml.length + excel.length
     let k = kho
     let xong = 0
-    const dem = { toKhai: 0, chungTu: 0, hoaDon: 0, excel: 0, boQua: 0, loiMay: 0 }
+    const dem = { toKhai: 0, chungTu: 0, hoaDon: 0, excel: 0, boQua: 0, loiMay: 0, trung: 0 }
     const uid = user?.uid
     const viec: (() => Promise<unknown>)[] = []
+    // Chứng từ đã có trên mây (cùng số + ngày lập) thì không lưu thêm bản nữa, kể cả khi file tải lại khác vài byte
+    const ctDaCo = new Set((may?.chungTu ?? []).map((c) => `${c.mst}|${khoaChungTu(c)}`))
     const buoc = (ten: string) => setTienDo({ xong: ++xong, tong, dangLam: ten })
     setKetQuaNap('')
     setTienDo({ xong: 0, tong, dangLam: 'bắt đầu…' })
@@ -330,7 +332,14 @@ export default function App() {
         if (tl.loai === 'hoaDon') dem.hoaDon++
         if (uid) {
           if (tl.loai === 'toKhai') viec.push(() => luuToKhai(uid, tl.tk, text, f.name, { tenTKhai: tl.tenTKhai, kyChu: tl.kyChu }))
-          if (tl.loai === 'chungTu') viec.push(() => luuChungTu(uid, tl.ct, text, f.name))
+          if (tl.loai === 'chungTu') {
+            const khoa = `${tl.ct.mst}|${khoaChungTu(tl.ct)}`
+            if (ctDaCo.has(khoa)) dem.trung++
+            else {
+              ctDaCo.add(khoa)
+              viec.push(() => luuChungTu(uid, tl.ct, text, f.name))
+            }
+          }
           if (tl.loai === 'hoaDon') {
             const mstCty = k.congTy[tl.hd.mstBan] ? tl.hd.mstBan : tl.hd.mstMua
             const loai = mstCty === tl.hd.mstBan ? 'ban' : 'mua'
@@ -393,6 +402,7 @@ export default function App() {
     setKetQuaNap(
       `Đã nạp ${dem.toKhai} tờ khai, ${dem.chungTu} chứng từ, ${dem.hoaDon} hoá đơn XML, ${dem.excel} file Excel.` +
         (dem.boQua ? ` Bỏ qua ${dem.boQua} file không đọc được.` : '') +
+        (dem.trung ? ` ${dem.trung} chứng từ đã có sẵn trên mây (cùng số, cùng ngày) — không lưu thêm.` : '') +
         (uid ? (dem.loiMay ? ` ⚠️ ${dem.loiMay} file chưa lưu được lên mây — nạp lại sau.` : ' ☁️ Đã lưu hết lên mây.') : ' (Chưa đăng nhập: chỉ lưu trên máy này.)'),
     )
   }

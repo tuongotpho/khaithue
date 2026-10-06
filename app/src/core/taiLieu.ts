@@ -15,12 +15,27 @@ export interface DongChungTu {
 }
 
 export interface ChungTu {
-  so: string
+  so: string // SO_CTU; giấy nộp tiền chưa có số thì tạm lấy ID_CTU
   ngay: string // dd/MM/yyyy
   mst: string
   tenNNop: string
   tong: number
   dong: DongChungTu[]
+  /** false = giấy nộp tiền KHÔNG có số chứng từ (ngân hàng/kho bạc chưa xác nhận) -> không tính là đã nộp.
+   *  Bản lưu cũ không có trường này = có số. */
+  coSoCT?: boolean
+}
+
+/** Cùng một chứng từ = cùng số + cùng ngày lập (số chứng từ có thể lặp lại giữa các năm / kho bạc) */
+export const khoaChungTu = (ct: Pick<ChungTu, 'so' | 'ngay'>) => `${ct.so}|${ct.ngay}`
+/** Chứng từ đã được ngân hàng/kho bạc cấp số -> tiền đã vào ngân sách */
+export const daXacNhan = (ct: Pick<ChungTu, 'coSoCT'>) => ct.coSoCT !== false
+
+/** Ghi chứng từ vào nhóm theo khoá chuẩn; xoá bản trùng nằm dưới khoá cũ (sổ cũ trên máy từng khoá theo số) */
+export function datChungTu(nhom: Record<string, ChungTu>, ct: ChungTu) {
+  const k = khoaChungTu(ct)
+  for (const [kc, c] of Object.entries(nhom)) if (kc !== k && khoaChungTu(c) === k) delete nhom[kc]
+  nhom[k] = ct
 }
 
 export type TaiLieu =
@@ -60,7 +75,10 @@ export function docTaiLieu(xml: string): TaiLieu {
     }))
     return {
       loai: 'chungTu',
-      ct: { so: the(xml, 'SO_CTU') || the(xml, 'ID_CTU'), ngay: the(xml, 'NGAY_LAP'), mst: the(xml, 'MST_NNOP'), tenNNop: the(xml, 'TEN_NNOP'), tong: so(the(xml, 'TONG_TIEN')), dong },
+      ct: {
+        so: the(xml, 'SO_CTU') || the(xml, 'ID_CTU'), ngay: the(xml, 'NGAY_LAP'), mst: the(xml, 'MST_NNOP'), tenNNop: the(xml, 'TEN_NNOP'), tong: so(the(xml, 'TONG_TIEN')), dong,
+        coSoCT: !!the(xml, 'SO_CTU'),
+      },
     }
   }
 

@@ -6,7 +6,7 @@
 import * as XLSX from 'xlsx'
 import { docTep, phanLoai, phuSongFile, quyNhieuNhat, type TepHoaDon } from '../../src/core/excel.js'
 import { napTaiLieu, rutGonHoaDon } from '../../src/core/kho.js'
-import { docTaiLieu } from '../../src/core/taiLieu.js'
+import { docTaiLieu, khoaChungTu } from '../../src/core/taiLieu.js'
 import type { HoSoDN } from '../../src/core/types.js'
 import { tenFileXML, xmlGTGT } from '../../src/core/xml.js'
 import { chonMst, lapToKhaiGTGT, LoiNguoiDung, type DuLieu, type ThamSoLapGTGT } from '../congCu.js'
@@ -59,6 +59,8 @@ export async function napTaiLieuLenMay(n: NguCanhMay, a: { ten_file: string; noi
     } else if (tl.loai === 'chungTu') {
       mst = tl.ct.mst
       if (!n.du.kho.congTy[mst]) throw new LoiNguoiDung(`Chứng từ của MST ${mst} — chưa có công ty này trên mây. Nạp một tờ khai XML của công ty trước.`)
+      const daCo = n.may.chungTu.find((c) => c.mst === mst && khoaChungTu(c) === khoaChungTu(tl.ct))
+      if (daCo) return { daLuu: false, mst, moTa: `Chứng từ số ${tl.ct.so} ngày ${tl.ct.ngay} đã có trên mây (file ${daCo.tenFile}) — không lưu thêm bản trùng.` }
       await km.luuChungTu(n.fb, tl.ct, text, ten)
     } else if (tl.loai === 'hoaDon') {
       mst = k.congTy[tl.hd.mstBan] ? tl.hd.mstBan : tl.hd.mstMua

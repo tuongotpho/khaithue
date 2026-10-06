@@ -5,7 +5,7 @@ import type { CanhBao, KyKeKhai } from './types.js'
 import { tachThueSuat } from './gtgt.js'
 import { denNgay, hanNop } from './ky.js'
 import { khoaKy, soCai, tenKy, tinhTrangKy, type Kho, type PhienBanGTGT, type ToKhaiKhac } from './kho.js'
-import { kyCuaChungTu, nhomNop, type ChungTu, type NhomNop } from './taiLieu.js'
+import { daXacNhan, khoaChungTu, kyCuaChungTu, nhomNop, type ChungTu, type NhomNop } from './taiLieu.js'
 
 export interface TongHD {
   n: number
@@ -79,7 +79,11 @@ const tien = (n: number) => n.toLocaleString('vi-VN')
 export function tinhTongQuan(kho: Kho, mst: string, homNay = new Date()): TongQuan {
   const gtgt = kho.gtgt[mst] ?? {}
   const tncn = kho.tncn[mst] ?? {}
-  const chungTu = Object.values(kho.chungTu?.[mst] ?? {})
+  // Chống trùng lần nữa ngay lúc cộng (phòng sổ cũ còn bản trùng dưới khoá khác); chỉ tính chứng từ đã có số
+  const moiCT = new Map<string, ChungTu>()
+  for (const c of Object.values(kho.chungTu?.[mst] ?? {})) moiCT.set(khoaChungTu(c), c)
+  const chungTu = [...moiCT.values()].filter(daXacNhan)
+  const chuaXacNhan = [...moiCT.values()].filter((c) => !daXacNhan(c))
   const hoaDon = Object.values(kho.hoaDon?.[mst] ?? {})
   const khac = Object.values(kho.toKhaiKhac?.[mst] ?? {}).sort((a, b) => b.ky.localeCompare(a.ky))
 
@@ -200,6 +204,13 @@ export function tinhTongQuan(kho: Kho, mst: string, homNay = new Date()): TongQu
         canhBao.push({ muc: 'chu_y', noiDung: `Quý ${ten}: còn ${tien(-lech)} đ hoá đơn mua vào chưa kê khai (hoá đơn ${tien(q.hoaDon.mua.v)} đ, tờ khai [23] ${tien(tk)} đ). Nếu đủ điều kiện có thể kê khai vào kỳ sau để được khấu trừ.` })
       }
     }
+  }
+
+  if (chuaXacNhan.length) {
+    canhBao.push({
+      muc: 'chu_y',
+      noiDung: `${chuaXacNhan.length} giấy nộp tiền KHÔNG có số chứng từ (ngân hàng/kho bạc chưa xác nhận) — không tính là đã nộp: ${chuaXacNhan.map((c) => `ngày ${c.ngay} ${tien(c.tong)} đ`).join('; ')}. Nếu tiền đã trừ tài khoản, tải lại chứng từ có số trên eTax.`,
+    })
   }
 
   // Quý có số phải nộp nhưng chưa nạp chứng từ nộp tiền: gộp 1 dòng nhắc

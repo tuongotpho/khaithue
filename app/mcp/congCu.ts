@@ -8,7 +8,7 @@ import { kiemDauKy, NHAP_TAY_TRONG, tinhGTGT, type NhapTayGTGT } from '../src/co
 import { dauKy, khoaKy, kyTruoc, soCai, tinhTrangKy, type Kho } from '../src/core/kho.js'
 import { hanNop, quyCanKhai } from '../src/core/ky.js'
 import { NHAN_GTGT } from '../src/core/nhan.js'
-import { tenTieuMuc, kyCuaChungTu } from '../src/core/taiLieu.js'
+import { daXacNhan, tenTieuMuc, kyCuaChungTu } from '../src/core/taiLieu.js'
 import { tinhDoiSoat, tinhDoiTac, tinhTongQuan } from '../src/core/tongQuan.js'
 import type { CanhBao, HoaDon, KyKeKhai } from '../src/core/types.js'
 import { tenFileXML, xmlGTGT } from '../src/core/xml.js'
@@ -276,9 +276,10 @@ export function chungTuNopTien(d: DuLieu, a: { mst?: string; nam?: number }) {
   ds.sort((x, y) => x.ngay.split('/').reverse().join('').localeCompare(y.ngay.split('/').reverse().join('')))
   return {
     mst,
-    tong: ds.reduce((s, c) => s + c.tong, 0),
+    // Chỉ cộng chứng từ đã có số (giấy nộp tiền chưa được ngân hàng/kho bạc xác nhận thì không tính)
+    tong: ds.filter(daXacNhan).reduce((s, c) => s + c.tong, 0),
     chungTu: ds.map((c) => ({
-      so: c.so, ngay: c.ngay, tong: c.tong,
+      so: c.so, ngay: c.ngay, tong: c.tong, ...(daXacNhan(c) ? {} : { chuaXacNhan: 'không có số chứng từ — không tính là đã nộp' }),
       dong: c.dong.map((x) => ({ loai: tenTieuMuc(x.ndkt), tieuMuc: x.ndkt, kyThue: kyCuaChungTu(x.kyThue), tien: x.tien, noiDung: x.noiDung })),
     })),
   }
