@@ -28,7 +28,10 @@ interface VeTruyCap extends Ve { u: string; rt: string; p: string; tm: string }
 
 const jsonRes = (x: unknown, status = 200, them: Record<string, string> = {}) =>
   new Response(JSON.stringify(x), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...them } })
-const loiOAuth = (error: string, moTa: string, status = 400) => jsonRes({ error, error_description: moTa }, status)
+const loiOAuth = (error: string, moTa: string, status = 400) => {
+  console.log('[oauth] tu-choi', error, moTa)
+  return jsonRes({ error, error_description: moTa }, status)
+}
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 /** Mã truy cập Firebase dùng lại trong lúc máy chủ còn "ấm" (khỏi đổi mã mỗi lần gọi) */
@@ -89,6 +92,7 @@ export function taoXuLy(env: Env = process.env) {
     // ---------- Đăng ký ứng dụng AI (RFC 7591) ----------
     function dangKy(y: { redirect_uris?: unknown; client_name?: unknown }) {
       const uris = Array.isArray(y.redirect_uris) ? y.redirect_uris.filter((x): x is string => typeof x === 'string') : []
+      console.log('[oauth] dang-ky', JSON.stringify({ ten: y.client_name, redirect_uris: uris, hopLe: uris.map((u) => noiNhanHopLe(u, noiNhanThem)) }))
       if (!uris.length || !uris.every((u) => noiNhanHopLe(u, noiNhanThem))) {
         return loiOAuth('invalid_redirect_uri', 'Chỉ nhận địa chỉ trả về trên máy (localhost / 127.0.0.1) hoặc claude.ai / claude.com')
       }
@@ -125,6 +129,7 @@ export function taoXuLy(env: Env = process.env) {
       const maPhien = await taoPhien(fb, { tenMay, ungDung: yc.n, noiNhan: new URL(yc.r).host })
       const code = niemPhong(khoa, { l: 'ma', u: uid, rt: y.maLamMoi, p: maPhien, tm: tenMay, cc: yc.cc, r: yc.r, c: yc.c, exp: Date.now() + 5 * 60 * 1000 })
       const q = new URLSearchParams({ code, ...(yc.s ? { state: yc.s } : {}) })
+      console.log('[oauth] cho-phep', JSON.stringify({ ungDung: yc.n, noiNhan: new URL(yc.r).origin + new URL(yc.r).pathname }))
       return jsonRes({ chuyenToi: `${yc.r}${yc.r.includes('?') ? '&' : '?'}${q}` })
     }
 
@@ -132,6 +137,7 @@ export function taoXuLy(env: Env = process.env) {
     async function capVe(r: Request) {
       const loai = r.headers.get('content-type') ?? ''
       const f = loai.includes('json') ? new URLSearchParams(Object.entries(await r.json() as Record<string, string>)) : new URLSearchParams(await r.text())
+      console.log('[oauth] token', JSON.stringify({ grant: f.get('grant_type'), coMa: !!f.get('code'), coVerifier: !!f.get('code_verifier'), redirect: f.get('redirect_uri'), coClient: !!f.get('client_id'), coLamMoi: !!f.get('refresh_token'), loaiNoiDung: loai }))
       const phatVe = (v: { u: string; rt: string; p: string; tm: string }, veLamMoi?: string) => jsonRes({
         access_token: niemPhong(khoa, { l: 'truyCap', ...v, exp: Date.now() + GIO }),
         token_type: 'Bearer',
